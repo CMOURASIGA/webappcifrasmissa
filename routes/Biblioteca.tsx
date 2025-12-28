@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Trash2, ArrowLeft, RefreshCw, Cloud, X, CheckCircle2, AlertCircle, Info, Loader2 } from 'lucide-react';
+import { Search, Plus, Trash2, ArrowLeft, RefreshCw, Cloud, X, CheckCircle2, AlertCircle, Info, Loader2, SortAsc } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { normalizeText } from '../utils/stringUtils';
 
 const Biblioteca: React.FC = () => {
-  const { cifras, deleteCifra, addCifra, categorias, syncFromDrive, isSyncing, syncStatus } = useApp();
+  const { cifras, deleteCifra, addCifra, categorias, syncFromDrive, isSyncing, syncStatus, sortLibrary } = useApp();
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [syncResult, setSyncResult] = useState<{
@@ -138,15 +138,25 @@ const Biblioteca: React.FC = () => {
         </div>
       )}
 
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-        <input 
-          type="text"
-          placeholder="Buscar na sua biblioteca local..."
-          className="w-full pl-12 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input 
+            type="text"
+            placeholder="Buscar na sua biblioteca local..."
+            className="w-full pl-12 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button 
+          onClick={sortLibrary}
+          className="px-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-blue-600 hover:border-blue-200 transition-all flex items-center gap-2"
+          title="Ordenar de A a Z"
+        >
+          <SortAsc size={20} />
+          <span className="hidden sm:inline text-xs font-bold uppercase tracking-widest">A-Z</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">

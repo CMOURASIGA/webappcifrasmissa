@@ -20,10 +20,11 @@ interface AppContextType {
   config: AppConfig;
   isSyncing: boolean;
   syncStatus: string;
-  effectiveFolderId: string; // O ID real que será usado (Manual ou ENV)
-  isUsingEnvFallback: boolean; // Indica se está usando o fallback do servidor
+  effectiveFolderId: string;
+  isUsingEnvFallback: boolean;
   syncFromDrive: () => Promise<SyncResult>;
   saveToDrive: () => Promise<boolean>;
+  sortLibrary: () => void; // Novo comando exposto
   addCifra: (cifra: Omit<Cifra, 'id' | 'criadoEm'>) => void;
   updateCifra: (id: string, cifra: Partial<Cifra>) => void;
   deleteCifra: (id: string) => void;
@@ -38,7 +39,6 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Pega o ID da variável de ambiente injetada pelo Vite/Vercel
 const ENV_DRIVE_ID = (process.env as any).DRIVE_FOLDER_ID || '';
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -54,9 +54,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [syncStatus, setSyncStatus] = useState('');
   const syncTimeoutRef = useRef<number | null>(null);
 
-  // Lógica de Prioridade Conforme Solicitado:
-  // Se o usuário definiu algo no sistema (config.driveFolderId), esse é o mandatório.
-  // Se estiver em branco/vazio, busca da chave de ambiente (ENV).
   const effectiveFolderId = (config.driveFolderId && config.driveFolderId.trim() !== '') 
     ? config.driveFolderId.trim() 
     : ENV_DRIVE_ID;
@@ -67,6 +64,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => storage.set('LISTAS', listas), [listas]);
   useEffect(() => storage.set('CATEGORIAS', categorias), [categorias]);
   useEffect(() => storage.set('CONFIG', config), [config]);
+
+  // Função auxiliar para ordenar cifras
+  const getSortedCifras = (list: Cifra[]) => {
+    return [...list].sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR', { sensitivity: 'base' }));
+  };
+
+  const sortLibrary = () => {
+    setCifras(prev => getSortedCifras(prev));
+  };
 
   const scheduleDriveSave = () => {
     if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
@@ -95,7 +101,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     let keptCount = 0;
 
     try {
-      // Configuramos o ID no serviço antes de qualquer chamada
       await googleDriveService.setConfiguredFolderId(effectiveFolderId);
       
       setSyncStatus('Lendo arquivos da pasta...');
@@ -139,7 +144,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             updatedList.push(local);
           }
         });
-        setCifras(updatedList);
+        
+        // ORDENAÇÃO AUTOMÁTICA APÓS SINCRONIZAÇÃO
+        setCifras(getSortedCifras(updatedList));
       }
 
       if (Array.isArray(driveListas) && driveListas.length > 0) {
@@ -184,7 +191,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addCifra = (data: Omit<Cifra, 'id' | 'criadoEm'>) => {
     const newCifra: Cifra = { ...data, id: Math.random().toString(36).substring(2, 11), criadoEm: new Date().toISOString() };
-    setCifras(prev => [newCifra, ...prev]);
+    // Adiciona e ordena
+    setCifras(prev => getSortedCifras([newCifra, ...prev]));
     scheduleDriveSave();
   };
 
@@ -222,7 +230,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider value={{
       cifras, listas, categorias, config, isSyncing, syncStatus, effectiveFolderId, isUsingEnvFallback,
-      syncFromDrive, saveToDrive,
+      syncFromDrive, saveToDrive, sortLibrary,
       addCifra, updateCifra, deleteCifra,
       addLista, updateLista, deleteLista,
       addCategoria, deleteCategoria, updateConfig, clearAllData
