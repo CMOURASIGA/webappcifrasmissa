@@ -6,7 +6,7 @@ import { useApp } from '../context/AppContext';
 import { formatDate } from '../utils/stringUtils';
 
 const Listas: React.FC = () => {
-  const { listas, deleteLista, isSyncing, saveToDrive, config } = useApp();
+  const { listas, cifras, deleteLista, isSyncing, saveToDrive, config } = useApp();
   const [syncFeedback, setSyncFeedback] = useState<{show: boolean, success?: boolean}>({ show: false });
 
   const handleManualBackup = async () => {
@@ -63,54 +63,89 @@ const Listas: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {listas.map(lista => (
-          <div key={lista.id} className="group bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-all relative">
-            <div className="flex justify-between items-start mb-4">
-              <div className="space-y-1">
-                <Link to={`/listas/${lista.id}`} className="text-xl font-bold text-gray-900 hover:text-amber-600 transition-colors flex items-center gap-2">
-                  {lista.nome}
-                  <span title="Sincronizado">
-                    <Cloud size={14} className="text-green-500 opacity-60" />
-                  </span>
-                </Link>
-                <div className="flex items-center gap-3 text-xs text-gray-400 font-medium uppercase tracking-wider">
-                  <span className="flex items-center gap-1"><Calendar size={14}/> {formatDate(lista.criadoEm)}</span>
-                  <span className="flex items-center gap-1"><Music size={14}/> {lista.cifraIds.length} músicas</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-20">
+        {listas.map(lista => {
+          // Busca os títulos das músicas desta lista
+          const musicasDaLista = lista.cifraIds
+            .map(cid => cifras.find(c => c.id === cid))
+            .filter(Boolean);
+          
+          const maxVisible = 4;
+          const displayMusicas = musicasDaLista.slice(0, maxVisible);
+          const remainingCount = musicasDaLista.length - maxVisible;
+
+          return (
+            <div key={lista.id} className="group bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all relative flex flex-col h-full">
+              <div className="flex justify-between items-start mb-3">
+                <div className="space-y-1 min-w-0">
+                  <Link to={`/listas/${lista.id}`} className="text-lg font-bold text-gray-900 hover:text-amber-600 transition-colors flex items-center gap-2 truncate">
+                    {lista.nome}
+                    <span title="Sincronizado">
+                      <Cloud size={12} className="text-green-500 opacity-60" />
+                    </span>
+                  </Link>
+                  <div className="flex items-center gap-3 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                    <span className="flex items-center gap-1"><Calendar size={12}/> {formatDate(lista.criadoEm)}</span>
+                    <span className="flex items-center gap-1"><Music size={12}/> {lista.cifraIds.length} músicas</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 ml-2">
+                  <Link 
+                    to={`/listas/editar/${lista.id}`}
+                    className="p-1.5 text-gray-300 hover:text-amber-500 transition-colors"
+                    title="Editar lista"
+                  >
+                    <Edit3 size={18} />
+                  </Link>
+                  <button 
+                    onClick={() => confirm('Excluir esta lista?') && deleteLista(lista.id)}
+                    className="p-1.5 text-gray-300 hover:text-red-500 transition-colors"
+                    title="Excluir lista"
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
+              
+              <div className="flex-1 space-y-3 mt-1">
+                {lista.descricao && (
+                  <p className="text-gray-500 text-xs italic line-clamp-1 border-l-2 border-gray-100 pl-2">{lista.descricao}</p>
+                )}
+
+                {/* VISUALIZAÇÃO DAS MÚSICAS NO CARD */}
+                <div className="bg-gray-50/50 rounded-xl p-3 space-y-2 border border-gray-50">
+                   <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1">Repertório:</h4>
+                   <div className="space-y-1.5">
+                     {displayMusicas.map((musica, idx) => (
+                       <div key={musica?.id || idx} className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+                          <span className="truncate">{musica?.titulo || 'Música s/ Nome'}</span>
+                          <span className="text-[9px] text-gray-400 font-bold ml-auto opacity-50">{musica?.tomBase}</span>
+                       </div>
+                     ))}
+                     {remainingCount > 0 && (
+                       <div className="text-[10px] text-amber-600 font-bold pl-3.5 pt-0.5">
+                          + {remainingCount} músicas nesta lista...
+                       </div>
+                     )}
+                     {musicasDaLista.length === 0 && (
+                       <div className="text-xs text-gray-300 italic">Lista vazia</div>
+                     )}
+                   </div>
+                </div>
+              </div>
+
+              <div className="mt-4">
                 <Link 
-                  to={`/listas/editar/${lista.id}`}
-                  className="p-2 text-gray-300 hover:text-amber-500 transition-colors"
-                  title="Editar lista"
+                  to={`/listas/${lista.id}`}
+                  className="w-full bg-amber-50 hover:bg-amber-500 hover:text-white text-amber-700 py-3 rounded-xl font-bold text-center text-sm transition-all flex items-center justify-center gap-2 group/btn"
                 >
-                  <Edit3 size={20} />
+                  Modo Tocar <ChevronRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
                 </Link>
-                <button 
-                  onClick={() => confirm('Excluir esta lista?') && deleteLista(lista.id)}
-                  className="p-2 text-gray-300 hover:text-red-500 transition-colors"
-                  title="Excluir lista"
-                >
-                  <Trash2 size={20} />
-                </button>
               </div>
             </div>
-            
-            {lista.descricao && (
-              <p className="text-gray-500 text-sm line-clamp-2 mb-6">{lista.descricao}</p>
-            )}
-
-            <div className="flex gap-2">
-              <Link 
-                to={`/listas/${lista.id}`}
-                className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 py-3 rounded-xl font-bold text-center text-sm transition-colors flex items-center justify-center gap-2"
-              >
-                Modo Tocar <ChevronRight size={16} />
-              </Link>
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {listas.length === 0 && (
           <div className="col-span-full py-20 text-center space-y-4">
