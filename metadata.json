@@ -1,0 +1,5 @@
+{
+  "name": "Cifras MISSA",
+  "description": "Um sistema completo para organização e visualização de cifras musicais voltado para ministérios de música e liturgia de igrejas, com suporte a transposição e setlists.",
+  "requestFramePermissions": []
+}
