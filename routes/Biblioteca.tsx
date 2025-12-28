@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Trash2, ArrowLeft, RefreshCw, CloudSync, X } from 'lucide-react';
+import { Search, Plus, Trash2, ArrowLeft, RefreshCw, Cloud, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { normalizeText } from '../utils/stringUtils';
 
@@ -97,7 +96,7 @@ const Biblioteca: React.FC = () => {
                 <div className="flex items-center gap-2">
                    {cifra.driveId && (
                      <span title="Sincronizado com Drive">
-                       <CloudSync size={14} className="text-green-500" />
+                       <Cloud size={14} className="text-green-500" />
                      </span>
                    )}
                    <button 
