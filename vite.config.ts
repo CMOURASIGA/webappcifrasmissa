@@ -12,6 +12,7 @@ export default defineConfig({
   },
   define: {
     // Injeta as variáveis do Vercel para que fiquem disponíveis no process.env do navegador
+    // Tenta capturar ambas as versões (maiúsculas e minúsculas) para evitar erros de deploy
     'process.env.GOOGLE_API': JSON.stringify(process.env.GOOGLE_API || process.env.google_api || ''),
     'process.env.DRIVE_FOLDER_ID': JSON.stringify(process.env.DRIVE_FOLDER_ID || process.env.drive_folder_id || '')
   }

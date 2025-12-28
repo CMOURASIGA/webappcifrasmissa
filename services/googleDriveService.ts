@@ -1,6 +1,7 @@
 
 /**
  * Este serviço gerencia a comunicação com o Google Apps Script.
+ * Otimizado para evitar erros de CORS 'Failed to fetch' e problemas de redirecionamento.
  */
 
 declare const google: any;
@@ -8,7 +9,8 @@ declare const google: any;
 const extractFolderId = (input: string): string => {
   if (!input) return '';
   if (input.includes('folders/')) {
-    return input.split('folders/')[1].split('?')[0].split('/')[0];
+    const parts = input.split('folders/')[1].split('?')[0].split('/');
+    return parts[0].trim();
   }
   return input.trim();
 };
@@ -16,7 +18,7 @@ const extractFolderId = (input: string): string => {
 let currentRuntimeApiUrl = '';
 
 const run = async (methodName: string, ...args: any[]): Promise<any> => {
-  // 1. Ambiente Google Apps Script (se embutido)
+  // 1. Ambiente Google Apps Script (se embutido no editor de script)
   if (typeof google !== 'undefined' && google.script && google.script.run) {
     return new Promise((resolve, reject) => {
       google.script.run
@@ -25,18 +27,24 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     });
   }
 
-  // 2. Ambiente Externo
+  // 2. Ambiente Externo (Vercel/Web)
   if (!currentRuntimeApiUrl) {
-    throw new Error('URL da API não configurada. Configure e salve nos Ajustes.');
+    throw new Error('URL da API não configurada. Vá em Ajustes.');
   }
 
   try {
     const isSaveMethod = methodName.startsWith('save') || methodName.startsWith('set');
-    
     let response;
-    
+
+    /**
+     * SOLUÇÃO PARA 'Failed to fetch':
+     * Enviamos como POST mesmo para leituras se necessário, ou usamos GET limpo.
+     * O segredo é NÃO enviar cabeçalhos customizados para evitar o preflight OPTIONS.
+     */
     if (isSaveMethod) {
-      // POST "Simple Request": Sem cabeçalhos para evitar o preflight OPTIONS
+      // POST "Simple Request"
+      // Nota: Não definimos Content-Type para ser tratado como text/plain pelo navegador
+      // mas o corpo é um JSON que o GAS entende via e.postData.contents
       response = await fetch(currentRuntimeApiUrl, {
         method: 'POST',
         mode: 'cors',
@@ -60,18 +68,24 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     }
 
     if (!response.ok) {
-      if (response.status === 404) throw new Error('API não encontrada (404). Verifique se a URL está correta.');
-      throw new Error(`Erro na conexão com o Google (${response.status}). Verifique se o Script está publicado para "Qualquer pessoa".`);
+      throw new Error(`Servidor respondeu com erro ${response.status}`);
     }
 
     const data = await response.json();
-    if (data && data.ok === false) throw new Error(data.error || 'O Google Script retornou um erro interno.');
+    if (data && data.ok === false) throw new Error(data.error || 'Erro interno no script do Google.');
     return data;
 
   } catch (e: any) {
     console.error('Fetch error:', e);
-    if (e.name === 'TypeError' || e.message.includes('fetch') || e.message.includes('NetworkError')) {
-      throw new Error('Falha de Segurança (CORS). Certifique-se de que o Script está publicado como "App da Web" para "Qualquer Pessoa" (Anyone).');
+    
+    // Tratamento específico para o erro que o usuário relatou
+    if (e.message.includes('fetch') || e.name === 'TypeError') {
+      throw new Error(
+        'Falha na Conexão (Failed to fetch). Dicas:\n' +
+        '1. Verifique se o Script está publicado para "Qualquer Pessoa" (Anyone).\n' +
+        '2. Tente usar uma Aba Anônima (se você tiver várias contas Google logadas, o redirecionamento do Script falha).\n' +
+        '3. Certifique-se que a URL termina em /exec'
+      );
     }
     throw e;
   }
@@ -79,11 +93,10 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
 
 export const googleDriveService = {
   setApiUrl: (url: string) => {
-    currentRuntimeApiUrl = url.trim();
+    if (url) currentRuntimeApiUrl = url.trim();
   },
   isApiConfigured: () => {
-    // Tenta detectar tanto a URL manual quanto a de ambiente
-    const envApi = (process.env as any).GOOGLE_API || '';
+    const envApi = (process.env.GOOGLE_API as string) || '';
     return !!(currentRuntimeApiUrl || envApi);
   },
   getConfiguredFolderId: () => run('getConfiguredFolderId'),
