@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit3, Type, ZoomIn, ZoomOut, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import CifraViewer from '../components/CifraViewer';
@@ -8,14 +9,19 @@ import TransposeControls from '../components/TransposeControls';
 const VerCifra: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { cifras, updateCifra, categorias } = useApp();
+  const { cifras, updateCifra, categorias, config, updateConfig } = useApp();
   const cifra = cifras.find(c => c.id === id);
   
   const [transpose, setTranspose] = useState(0);
-  const [fontSize, setFontSize] = useState(16);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
-  // Estado para o formulário de edição
+  const fontSize = config.chordFontSize || 14;
+
+  const handleZoom = (delta: number) => {
+    const newSize = Math.min(32, Math.max(10, fontSize + delta));
+    updateConfig({ chordFontSize: newSize });
+  };
+
   const [editFormData, setEditFormData] = useState({
     titulo: '',
     tomBase: 'C',
@@ -23,7 +29,6 @@ const VerCifra: React.FC = () => {
     selectedCategorias: [] as string[]
   });
 
-  // Inicializar formulário quando abrir modal ou cifra carregar
   useEffect(() => {
     if (cifra) {
       setEditFormData({
@@ -68,44 +73,47 @@ const VerCifra: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="sticky top-16 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm px-4 py-3">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <div className="sticky top-16 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm px-2 md:px-4 py-2">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
+          <div className="flex items-center gap-2">
             <button 
               onClick={() => navigate(-1)} 
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={18} />
             </button>
-            <div>
-              <h1 className="text-lg md:text-xl font-bold text-gray-900 leading-none">{cifra.titulo}</h1>
-              <p className="text-xs text-gray-400 mt-1 font-semibold uppercase tracking-wider">Tom Original: {cifra.tomBase}</p>
+            <div className="min-w-0">
+              <h1 className="text-sm md:text-lg font-bold text-gray-900 leading-tight truncate">{cifra.titulo}</h1>
+              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Tom: {cifra.tomBase}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 self-center md:self-auto">
-             <div className="flex items-center bg-gray-100 rounded-lg p-1">
-                <button onClick={() => setFontSize(s => Math.max(10, s - 2))} className="p-1.5 hover:bg-white rounded text-gray-500"><ZoomOut size={18}/></button>
-                <div className="px-2 text-xs font-bold text-gray-500"><Type size={14}/></div>
-                <button onClick={() => setFontSize(s => Math.min(32, s + 2))} className="p-1.5 hover:bg-white rounded text-gray-500"><ZoomIn size={18}/></button>
+          <div className="flex items-center justify-between md:justify-end gap-2 px-2 md:px-0">
+             <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                <button onClick={() => handleZoom(-2)} className="p-1.5 hover:bg-white rounded text-gray-500" title="Diminuir fonte"><ZoomOut size={16}/></button>
+                <div className="px-1.5 text-[10px] font-black text-gray-400 select-none">{fontSize}px</div>
+                <button onClick={() => handleZoom(2)} className="p-1.5 hover:bg-white rounded text-gray-500" title="Aumentar fonte"><ZoomIn size={16}/></button>
              </div>
-             <TransposeControls 
-               amount={transpose} 
-               onChange={setTranspose} 
-               onReset={() => setTranspose(0)} 
-             />
-             <button 
-               onClick={() => setIsEditModalOpen(true)}
-               className="md:hidden p-2.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100"
-               title="Editar Cifra"
-             >
-               <Edit3 size={20} />
-             </button>
+             
+             <div className="scale-90 md:scale-100 origin-right flex items-center gap-2">
+               <TransposeControls 
+                 amount={transpose} 
+                 onChange={setTranspose} 
+                 onReset={() => setTranspose(0)} 
+               />
+               <button 
+                 onClick={() => setIsEditModalOpen(true)}
+                 className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                 title="Editar Cifra"
+               >
+                 <Edit3 size={18} />
+               </button>
+             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto p-4 mt-4">
+      <div className="max-w-5xl mx-auto p-2 md:p-4">
         <CifraViewer 
           conteudo={cifra.conteudo} 
           transposeAmount={transpose} 
@@ -113,16 +121,7 @@ const VerCifra: React.FC = () => {
         />
       </div>
 
-      <div className="fixed bottom-6 right-6 hidden md:block">
-        <button 
-          onClick={() => setIsEditModalOpen(true)}
-          className="bg-white border border-gray-200 p-4 rounded-full shadow-lg text-gray-700 hover:text-blue-600 transition-all hover:scale-105 active:scale-95"
-        >
-           <Edit3 size={24} />
-        </button>
-      </div>
-
-      {/* Modal de Edição */}
+      {/* Modal de Edição permanece... */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">

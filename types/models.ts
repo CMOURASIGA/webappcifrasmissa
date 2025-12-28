@@ -28,6 +28,7 @@ export interface Lista {
 
 export interface AppConfig {
   fontSize: number;
+  chordFontSize: number;
   theme: 'light' | 'dark';
   driveFolderId?: string;
   lastSync?: string;

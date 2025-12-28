@@ -19,6 +19,7 @@ interface AppContextType {
   categorias: CategoriaLiturgica[];
   config: AppConfig;
   isSyncing: boolean;
+  syncStatus: string;
   syncFromDrive: () => Promise<SyncResult>;
   saveToDrive: () => Promise<boolean>;
   addCifra: (cifra: Omit<Cifra, 'id' | 'criadoEm'>) => void;
@@ -39,8 +40,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [cifras, setCifras] = useState<Cifra[]>(() => storage.get<Cifra[]>('CIFRAS') || []);
   const [listas, setListas] = useState<Lista[]>(() => storage.get<Lista[]>('LISTAS') || []);
   const [categorias, setCategorias] = useState<CategoriaLiturgica[]>(() => storage.get<CategoriaLiturgica[]>('CATEGORIAS') || []);
-  const [config, setConfig] = useState<AppConfig>(() => storage.get<AppConfig>('CONFIG') || { fontSize: 16, theme: 'light' });
+  const [config, setConfig] = useState<AppConfig>(() => storage.get<AppConfig>('CONFIG') || { fontSize: 16, chordFontSize: 14, theme: 'light' });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('');
   const syncTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => storage.set('CIFRAS', cifras), [cifras]);
@@ -52,63 +54,71 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
     syncTimeoutRef.current = window.setTimeout(() => {
       saveToDrive();
-    }, 3000);
+    }, 5000);
   };
 
   const clearAllData = () => {
     setCifras([]);
     setListas([]);
     setCategorias([]);
-    localStorage.removeItem('cifras_missa_cifras');
-    localStorage.removeItem('cifras_missa_listas');
-    localStorage.removeItem('cifras_missa_categorias');
+    localStorage.clear();
   };
 
   const syncFromDrive = async (): Promise<SyncResult> => {
+    if (!config.driveFolderId) {
+      return { success: false, error: 'Configure o ID da pasta nos Ajustes antes de sincronizar.' };
+    }
+
     setIsSyncing(true);
+    setSyncStatus('Conectando ao Google Drive...');
+    
     let newCount = 0;
     let updatedCount = 0;
     let keptCount = 0;
 
     try {
+      setSyncStatus('Lendo arquivos da pasta...');
       const driveFiles = await googleDriveService.getAllTextFiles();
+      
+      setSyncStatus('Sincronizando listas e preferências...');
       const driveListas = await googleDriveService.getUserLists();
       
       if (Array.isArray(driveFiles)) {
-        setCifras(prev => {
-          const updatedCifras = [...prev];
-          
-          driveFiles.forEach((file: any) => {
-            const index = updatedCifras.findIndex(c => c.driveId === file.id || c.titulo === file.nome);
-            
-            const needsUpdate = index === -1 || updatedCifras[index].ultimaAtualizacao !== file.ultimaAtualizacao;
+        setSyncStatus(`Comparando ${driveFiles.length} arquivos...`);
+        const localCifrasMap = new Map(cifras.map(c => [c.driveId || c.titulo, c]));
+        const updatedList: Cifra[] = [];
 
-            if (needsUpdate) {
-              const cifraData: Cifra = {
-                id: index >= 0 ? updatedCifras[index].id : Math.random().toString(36).substring(2, 11),
-                driveId: file.id,
-                titulo: file.nome,
-                conteudo: file.conteudo,
-                tomBase: index >= 0 ? updatedCifras[index].tomBase : 'C',
-                categorias: index >= 0 ? updatedCifras[index].categorias : [],
-                tags: index >= 0 ? updatedCifras[index].tags : [],
-                criadoEm: index >= 0 ? updatedCifras[index].criadoEm : new Date().toISOString(),
-                ultimaAtualizacao: file.ultimaAtualizacao
-              };
+        driveFiles.forEach((file: any) => {
+          const localMatch = localCifrasMap.get(file.id) || localCifrasMap.get(file.nome);
+          const hasChanged = !localMatch || localMatch.ultimaAtualizacao !== file.ultimaAtualizacao;
 
-              if (index >= 0) {
-                updatedCifras[index] = cifraData;
-                updatedCount++;
-              } else {
-                updatedCifras.push(cifraData);
-                newCount++;
-              }
-            } else {
-              keptCount++;
-            }
-          });
-          return updatedCifras;
+          if (hasChanged) {
+            const cifraData: Cifra = {
+              id: localMatch ? localMatch.id : Math.random().toString(36).substring(2, 11),
+              driveId: file.id,
+              titulo: file.nome,
+              conteudo: file.conteudo,
+              tomBase: localMatch ? localMatch.tomBase : 'C',
+              categorias: localMatch ? localMatch.categorias : [],
+              tags: localMatch ? localMatch.tags : [],
+              criadoEm: localMatch ? localMatch.criadoEm : new Date().toISOString(),
+              ultimaAtualizacao: file.ultimaAtualizacao
+            };
+            if (localMatch) updatedCount++; else newCount++;
+            updatedList.push(cifraData);
+          } else {
+            keptCount++;
+            if (localMatch) updatedList.push(localMatch);
+          }
         });
+
+        cifras.forEach(local => {
+          const driveTitles = new Set(driveFiles.map((f: any) => f.nome));
+          if (!local.driveId && !driveTitles.has(local.titulo)) {
+            updatedList.push(local);
+          }
+        });
+        setCifras(updatedList);
       }
 
       if (Array.isArray(driveListas) && driveListas.length > 0) {
@@ -117,25 +127,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const totalCount = driveFiles?.length || 0;
       setConfig(prev => ({ ...prev, lastSync: new Date().toISOString() }));
+      setSyncStatus('Sincronização concluída!');
       
-      return { 
-        success: true, 
-        count: totalCount,
-        newCount,
-        updatedCount,
-        keptCount
-      };
+      return { success: true, count: totalCount, newCount, updatedCount, keptCount };
     } catch (e: any) {
-      console.error('Erro ao sincronizar do Drive:', e);
-      return { success: false, error: e.message || 'Erro de conexão com o Drive.' };
+      console.error('Erro na sincronização:', e);
+      return { success: false, error: e.message || 'Erro de conexão.' };
     } finally {
       setIsSyncing(false);
+      setSyncStatus('');
     }
   };
 
   const saveToDrive = async (): Promise<boolean> => {
-    // Agora verifica a variável de ambiente process.env.google_api
-    if (!process.env.google_api) return false;
+    if (!config.driveFolderId) return false;
     setIsSyncing(true);
     try {
       await googleDriveService.saveUserLists(listas);
@@ -148,7 +153,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await googleDriveService.saveUserMeta(meta);
       return true;
     } catch (e) {
-      console.error('Erro ao salvar no Drive:', e);
+      console.error('Erro ao salvar:', e);
       return false;
     } finally {
       setIsSyncing(false);
@@ -156,11 +161,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addCifra = (data: Omit<Cifra, 'id' | 'criadoEm'>) => {
-    const newCifra: Cifra = {
-      ...data,
-      id: Math.random().toString(36).substring(2, 11),
-      criadoEm: new Date().toISOString()
-    };
+    const newCifra: Cifra = { ...data, id: Math.random().toString(36).substring(2, 11), criadoEm: new Date().toISOString() };
     setCifras(prev => [newCifra, ...prev]);
     scheduleDriveSave();
   };
@@ -172,21 +173,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteCifra = (id: string) => {
     setCifras(prev => prev.filter(c => c.id !== id));
-    setListas(prev => prev.map(l => ({
-      ...l,
-      cifraIds: l.cifraIds.filter(cid => cid !== id)
-    })));
     scheduleDriveSave();
   };
 
   const addLista = (data: Omit<Lista, 'id' | 'criadoEm' | 'atualizadoEm'>) => {
     const now = new Date().toISOString();
-    const newLista: Lista = {
-      ...data,
-      id: Math.random().toString(36).substring(2, 11),
-      criadoEm: now,
-      atualizadoEm: now
-    };
+    const newLista: Lista = { ...data, id: Math.random().toString(36).substring(2, 11), criadoEm: now, atualizadoEm: now };
     setListas(prev => [newLista, ...prev]);
     scheduleDriveSave();
   };
@@ -201,21 +193,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     scheduleDriveSave();
   };
 
-  const addCategoria = (nome: string) => {
-    setCategorias(prev => [...prev, { id: Math.random().toString(36).substring(2, 11), nome }]);
-  };
-
-  const deleteCategoria = (id: string) => {
-    setCategorias(prev => prev.filter(c => c.id !== id));
-  };
-
-  const updateConfig = (newConfig: Partial<AppConfig>) => {
-    setConfig(prev => ({ ...prev, ...newConfig }));
-  };
+  const addCategoria = (nome: string) => setCategorias(prev => [...prev, { id: Math.random().toString(36).substring(2, 11), nome }]);
+  const deleteCategoria = (id: string) => setCategorias(prev => prev.filter(c => c.id !== id));
+  const updateConfig = (newConfig: Partial<AppConfig>) => setConfig(prev => ({ ...prev, ...newConfig }));
 
   return (
     <AppContext.Provider value={{
-      cifras, listas, categorias, config, isSyncing,
+      cifras, listas, categorias, config, isSyncing, syncStatus,
       syncFromDrive, saveToDrive,
       addCifra, updateCifra, deleteCifra,
       addLista, updateLista, deleteLista,
@@ -228,6 +212,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) throw new Error('useApp must be used within an AppProvider');
+  if (!context) throw new Error('useApp deve ser usado dentro de um AppProvider');
   return context;
 };

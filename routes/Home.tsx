@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Book, List, Settings, HelpCircle, ChevronRight, Music, Cloud } from 'lucide-react';
+import { Book, List, Settings, HelpCircle, ChevronRight, Music, Cloud, AlertTriangle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 const Home: React.FC = () => {
@@ -18,18 +18,18 @@ const Home: React.FC = () => {
       </section>
 
       {!hasDriveConfig && (
-        <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6 animate-pulse">
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6 animate-pulse">
           <div className="bg-amber-100 p-4 rounded-full text-amber-600">
-            <Cloud size={32} />
+            <AlertTriangle size={32} />
           </div>
           <div className="flex-1 text-center md:text-left space-y-2">
-            <h3 className="text-amber-900 font-bold text-lg">Configuração Pendente!</h3>
-            <p className="text-amber-700 text-sm">Para baixar suas músicas, você precisa conectar o ID da sua pasta do Google Drive primeiro.</p>
+            <h3 className="text-amber-900 font-bold text-lg">Conecte seu Google Drive</h3>
+            <p className="text-amber-700 text-sm">Passo fundamental: você precisa configurar o ID da sua pasta de cifras para começar.</p>
             <Link 
               to="/configuracoes" 
-              className="inline-block bg-amber-600 text-white px-6 py-2 rounded-xl font-bold text-sm shadow-md hover:bg-amber-700 transition-colors"
+              className="inline-flex items-center gap-2 bg-amber-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-md hover:bg-amber-700 transition-colors"
             >
-              Configurar Drive Agora
+              Ir para Ajustes agora <ChevronRight size={16} />
             </Link>
           </div>
         </div>
@@ -75,40 +75,40 @@ const Home: React.FC = () => {
         </Link>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-4 text-white">
-        <h3 className="text-blue-400 font-bold flex items-center gap-2">
-          <HelpCircle size={20} /> Fluxo Recomendado
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-6 text-white">
+        <h3 className="text-blue-400 font-bold flex items-center gap-2 uppercase tracking-widest text-xs">
+          <ChevronRight size={16} /> Fluxo Recomendado para o Sucesso
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-           <div className="space-y-1">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Passo 1</span>
-              <p className="text-sm font-medium">Vá em <strong>Ajustes</strong> e coloque o ID da sua pasta do Drive.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           <div className={`space-y-2 p-4 rounded-2xl border ${!hasDriveConfig ? 'bg-blue-600 border-blue-500' : 'bg-slate-800/50 border-slate-700'}`}>
+              <span className="text-[10px] font-black opacity-50 uppercase">Passo 1</span>
+              <p className="text-sm font-bold">Configure o ID da Pasta do Drive nos <strong>Ajustes</strong>.</p>
            </div>
-           <div className="space-y-1">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Passo 2</span>
-              <p className="text-sm font-medium">Em <strong>Biblioteca</strong>, clique em Sincronizar para baixar as cifras.</p>
+           <div className="space-y-2 p-4 rounded-2xl bg-slate-800/50 border border-slate-700 opacity-80">
+              <span className="text-[10px] font-black opacity-50 uppercase">Passo 2</span>
+              <p className="text-sm font-bold">Vá na <strong>Biblioteca</strong> e clique em Sincronizar.</p>
            </div>
-           <div className="space-y-1">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Passo 3</span>
-              <p className="text-sm font-medium">Monte suas <strong>Listas</strong> e use a transposição em tempo real.</p>
+           <div className="space-y-2 p-4 rounded-2xl bg-slate-800/50 border border-slate-700 opacity-80">
+              <span className="text-[10px] font-black opacity-50 uppercase">Passo 3</span>
+              <p className="text-sm font-bold">Crie suas <strong>Listas</strong> e toque com transposição.</p>
            </div>
         </div>
-        <div className="pt-4">
+        <div className="pt-2 text-center">
           <Link 
             to="/como-usar" 
-            className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-colors border border-slate-700"
+            className="text-slate-400 hover:text-white text-xs font-bold underline decoration-slate-700 underline-offset-4"
           >
-            Ver Guia Completo <ChevronRight size={16} />
+            Ainda com dúvidas? Veja o Guia Completo
           </Link>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <Link to="/configuracoes" className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold transition-colors">
-          <Settings size={18} /> Configurações
+          <Settings size={18} /> Ajustes
         </Link>
         <Link to="/como-usar" className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold transition-colors">
-          <HelpCircle size={18} /> Tutorial
+          <HelpCircle size={18} /> Como Usar
         </Link>
       </div>
     </div>

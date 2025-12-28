@@ -15,7 +15,6 @@ const extractFolderId = (input: string): string => {
 };
 
 const getApiUrl = () => {
-  // Agora utiliza exclusivamente a variável de ambiente definida no Vercel
   return (process.env.google_api || '').trim();
 };
 
@@ -35,29 +34,43 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     throw new Error('A URL da API (google_api) não está configurada no ambiente.');
   }
 
-  // Aumentado para 300 segundos (5 minutos) para suportar 241+ músicas.
-  const TIMEOUT_MS = 300000; 
+  const TIMEOUT_MS = 300000; // 5 minutos
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const urlWithParams = new URL(apiUrl);
-    urlWithParams.searchParams.append('method', methodName);
-    urlWithParams.searchParams.append('args', JSON.stringify(args));
-
-    console.log(`[GAS] Executando ${methodName} em ${apiUrl}...`);
-
-    const response = await fetch(urlWithParams.toString(), {
-      method: 'GET',
-      mode: 'cors',
-      signal: controller.signal,
-      cache: 'no-store'
-    });
+    const isSaveMethod = methodName.startsWith('save') || methodName.startsWith('set');
+    
+    let response;
+    
+    if (isSaveMethod) {
+      // Usar POST para salvar dados evita o erro de URL muito longa (que causava o erro de mimeType nulo)
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        mode: 'cors',
+        signal: controller.signal,
+        body: JSON.stringify({
+          method: methodName,
+          args: args
+        })
+      });
+    } else {
+      // Usar GET para leitura simples
+      const urlWithParams = new URL(apiUrl);
+      urlWithParams.searchParams.append('method', methodName);
+      urlWithParams.searchParams.append('args', JSON.stringify(args));
+      
+      response = await fetch(urlWithParams.toString(), {
+        method: 'GET',
+        mode: 'cors',
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+    }
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      if (response.status === 404) throw new Error('Web App não encontrado (404). Verifique se a variável google_api está correta.');
       throw new Error(`Erro do Google (Status: ${response.status})`);
     }
 
@@ -67,15 +80,11 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
       throw new Error(data.error || 'O Google retornou um erro interno.');
     }
 
-    console.log(`[GAS] ${methodName} concluído com sucesso.`);
     return data;
   } catch (e: any) {
     clearTimeout(timeoutId);
     if (e.name === 'AbortError') {
-      throw new Error('O Google demorou mais de 5 minutos. Com 241 músicas, o processamento pode ser pesado. Tente dividir em pastas menores ou verifique a conexão.');
-    }
-    if (e.message.includes('Failed to fetch')) {
-      throw new Error('Bloqueio de CORS. Certifique-se de que publicou o Script como "App da Web" com acesso para "Qualquer pessoa".');
+      throw new Error('O tempo limite foi atingido. O Google Script pode estar demorando para processar muitos arquivos.');
     }
     throw e;
   }
