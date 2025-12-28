@@ -2,7 +2,7 @@
 {
   "name": "cifras-missa",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0",
-    "lucide-react": "^0.460.0"
+    "lucide-react": "^0.475.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
