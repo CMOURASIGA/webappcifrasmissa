@@ -9,5 +9,9 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist'
+  },
+  define: {
+    // Isso mapeia a variável google_api do Vercel para o código front-end
+    'process.env.google_api': JSON.stringify(process.env.google_api || '')
   }
 });
