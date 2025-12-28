@@ -6,19 +6,22 @@ export interface CategoriaLiturgica {
 
 export interface Cifra {
   id: string;
+  driveId?: string;
   titulo: string;
-  conteudo: string; // Raw text with chords
+  conteudo: string;
   tomBase: string;
   tags: string[];
-  categorias: string[]; // Array of CategoriaLiturgica IDs
+  categorias: string[];
   criadoEm: string;
+  ultimaAtualizacao?: string;
+  checksum?: string;
 }
 
 export interface Lista {
   id: string;
   nome: string;
   descricao?: string;
-  cifraIds: string[]; // Ordered list of Cifra IDs
+  cifraIds: string[];
   criadoEm: string;
   atualizadoEm: string;
 }
@@ -26,4 +29,7 @@ export interface Lista {
 export interface AppConfig {
   fontSize: number;
   theme: 'light' | 'dark';
+  driveFolderId?: string;
+  gasApiUrl?: string; // URL do Web App publicado no Google Apps Script
+  lastSync?: string;
 }
