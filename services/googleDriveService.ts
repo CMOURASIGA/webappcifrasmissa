@@ -1,7 +1,7 @@
 
 /**
  * Este serviço gerencia a comunicação com o Google Apps Script.
- * Ajustado para aceitar variáveis em maiúsculas ou minúsculas.
+ * Analisa variáveis de ambiente e configurações manuais.
  */
 
 declare const google: any;
@@ -15,8 +15,12 @@ const extractFolderId = (input: string): string => {
 };
 
 const getApiUrl = () => {
-  // Tenta buscar de ambas as formas para garantir compatibilidade com Vercel
-  const api = (process.env.google_api || (process.env as any).GOOGLE_API || '').trim();
+  // Análise robusta: tenta buscar do process.env (Vercel) ou de uma variável global
+  const api = (
+    (process.env as any).GOOGLE_API || 
+    (process.env as any).google_api || 
+    ''
+  ).trim();
   return api;
 };
 
@@ -32,10 +36,10 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
 
   // 2. Ambiente Externo (Vercel/Local)
   const apiUrl = getApiUrl();
-  if (!apiUrl) throw new Error('Variável google_api não configurada no servidor.');
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  
+  if (!apiUrl) {
+    throw new Error('Configuração Ausente: A variável GOOGLE_API não foi definida no Vercel ou no ambiente.');
+  }
 
   try {
     const isSaveMethod = methodName.startsWith('save') || methodName.startsWith('set');
@@ -43,17 +47,18 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     let response;
     
     if (isSaveMethod) {
-      // POST "Simple Request" (sem headers customizados) para evitar preflight OPTIONS
+      // POST para GAS: Enviamos como text/plain para evitar Preflight OPTIONS (erro comum de CORS)
       response = await fetch(apiUrl, {
         method: 'POST',
         mode: 'cors',
-        redirect: 'follow',
+        redirect: 'follow', // Crucial para o Google Apps Script
         body: JSON.stringify({
           method: methodName,
           args: args
         })
       });
     } else {
+      // GET para GAS
       const urlWithParams = new URL(apiUrl);
       urlWithParams.searchParams.append('method', methodName);
       urlWithParams.searchParams.append('args', JSON.stringify(args));
@@ -66,9 +71,8 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
       });
     }
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) {
+      if (response.status === 404) throw new Error('Script não encontrado (404). Verifique a URL da API.');
       throw new Error(`Erro HTTP ${response.status}. Verifique se o script está publicado como "Anyone".`);
     }
 
@@ -77,9 +81,8 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     return data;
 
   } catch (e: any) {
-    clearTimeout(timeoutId);
     if (e.name === 'TypeError' && e.message.includes('fetch')) {
-      throw new Error('Erro de CORS ou Script não publicado como "Qualquer pessoa" (Anyone).');
+      throw new Error('Bloqueio de CORS: O Google Script não permitiu o acesso. Verifique se ele foi publicado como "Qualquer Pessoa" (Anyone).');
     }
     throw e;
   }

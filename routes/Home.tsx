@@ -1,14 +1,15 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Book, List, Settings, HelpCircle, ChevronRight, Music, Cloud, AlertTriangle } from 'lucide-react';
+import { Book, List, Settings, HelpCircle, ChevronRight, Music, Cloud, AlertTriangle, Link as LinkIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { googleDriveService } from '../services/googleDriveService';
 
 const Home: React.FC = () => {
   const { cifras, listas, effectiveFolderId } = useApp();
   
-  // Agora verificamos o effectiveFolderId, que engloba tanto o manual quanto o do Vercel
   const hasDriveConfig = !!effectiveFolderId;
+  const hasApiConfig = googleDriveService.isApiConfigured();
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 space-y-8">
@@ -19,14 +20,28 @@ const Home: React.FC = () => {
         <p className="text-gray-600 text-lg">Seu ministério de música conectado e organizado.</p>
       </section>
 
-      {!hasDriveConfig && (
+      {/* Alerta de API Faltante (Vercel) */}
+      {!hasApiConfig && (
+        <div className="bg-red-50 border-2 border-red-200 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6">
+          <div className="bg-red-100 p-4 rounded-full text-red-600">
+            <LinkIcon size={32} />
+          </div>
+          <div className="flex-1 text-center md:text-left space-y-2">
+            <h3 className="text-red-900 font-bold text-lg">API do Google não encontrada</h3>
+            <p className="text-red-700 text-sm">A variável de ambiente <strong>GOOGLE_API</strong> não foi detectada. Verifique as configurações no painel do Vercel.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Alerta de Pasta Faltante */}
+      {hasApiConfig && !hasDriveConfig && (
         <div className="bg-amber-50 border-2 border-amber-200 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6 animate-pulse">
           <div className="bg-amber-100 p-4 rounded-full text-amber-600">
             <AlertTriangle size={32} />
           </div>
           <div className="flex-1 text-center md:text-left space-y-2">
-            <h3 className="text-amber-900 font-bold text-lg">Conecte seu Google Drive</h3>
-            <p className="text-amber-700 text-sm">Passo fundamental: você precisa configurar o ID da sua pasta de cifras para começar.</p>
+            <h3 className="text-amber-900 font-bold text-lg">Pasta não configurada</h3>
+            <p className="text-amber-700 text-sm">A API está pronta, mas você precisa definir o ID da sua pasta de cifras para começar.</p>
             <Link 
               to="/configuracoes" 
               className="inline-flex items-center gap-2 bg-amber-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-md hover:bg-amber-700 transition-colors"
@@ -37,7 +52,7 @@ const Home: React.FC = () => {
         </div>
       )}
 
-      {hasDriveConfig && cifras.length === 0 && (
+      {hasDriveConfig && hasApiConfig && cifras.length === 0 && (
         <div className="bg-blue-50 border-2 border-blue-100 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6">
           <div className="bg-blue-100 p-4 rounded-full text-blue-600">
             <Cloud size={32} />
@@ -100,11 +115,11 @@ const Home: React.FC = () => {
           <ChevronRight size={16} /> Fluxo Recomendado para o Sucesso
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-           <div className={`space-y-2 p-4 rounded-2xl border ${!hasDriveConfig ? 'bg-blue-600 border-blue-500' : 'bg-slate-800/50 border-slate-700'}`}>
+           <div className={`space-y-2 p-4 rounded-2xl border ${!hasDriveConfig || !hasApiConfig ? 'bg-blue-600 border-blue-500' : 'bg-slate-800/50 border-slate-700'}`}>
               <span className="text-[10px] font-black opacity-50 uppercase">Passo 1</span>
-              <p className="text-sm font-bold">Configure o ID da Pasta do Drive nos <strong>Ajustes</strong>.</p>
+              <p className="text-sm font-bold">Configure a API e o ID da Pasta nos <strong>Ajustes</strong>.</p>
            </div>
-           <div className={`space-y-2 p-4 rounded-2xl border ${hasDriveConfig && cifras.length === 0 ? 'bg-blue-600 border-blue-500' : 'bg-slate-800/50 border-slate-700 opacity-80'}`}>
+           <div className={`space-y-2 p-4 rounded-2xl border ${hasDriveConfig && hasApiConfig && cifras.length === 0 ? 'bg-blue-600 border-blue-500' : 'bg-slate-800/50 border-slate-700 opacity-80'}`}>
               <span className="text-[10px] font-black opacity-50 uppercase">Passo 2</span>
               <p className="text-sm font-bold">Vá na <strong>Biblioteca</strong> e clique em Sincronizar.</p>
            </div>
@@ -112,14 +127,6 @@ const Home: React.FC = () => {
               <span className="text-[10px] font-black opacity-50 uppercase">Passo 3</span>
               <p className="text-sm font-bold">Crie suas <strong>Listas</strong> e toque com transposição.</p>
            </div>
-        </div>
-        <div className="pt-2 text-center">
-          <Link 
-            to="/como-usar" 
-            className="text-slate-400 hover:text-white text-xs font-bold underline decoration-slate-700 underline-offset-4"
-          >
-            Ainda com dúvidas? Veja o Guia Completo
-          </Link>
         </div>
       </div>
 
