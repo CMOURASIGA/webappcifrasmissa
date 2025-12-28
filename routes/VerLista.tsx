@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, List as ListIcon } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, List as ListIcon, Maximize, Minimize } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import CifraViewer from '../components/CifraViewer';
 import TransposeControls from '../components/TransposeControls';
@@ -9,20 +9,61 @@ import TransposeControls from '../components/TransposeControls';
 const VerLista: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { listas, cifras, config } = useApp();
+  const { listas, cifras, config, updateConfig } = useApp();
   
   const lista = listas.find(l => l.id === id);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transposes, setTransposes] = useState<Record<string, number>>({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [localFontSize, setLocalFontSize] = useState(config.chordFontSize || 14);
 
-  const fontSize = config.chordFontSize || 14;
+  // Refs para controle de gesto de pinça (pinch-to-zoom)
+  const containerRef = useRef<HTMLDivElement>(null);
+  const initialDist = useRef<number | null>(null);
+  const initialFontSize = useRef<number>(localFontSize);
 
   const currentCifra = useMemo(() => {
     if (!lista) return null;
     const cid = lista.cifraIds[currentIndex];
     return cifras.find(c => c.id === cid);
   }, [lista, currentIndex, cifras]);
+
+  // Sincroniza o tamanho da fonte local com o global quando mudar via pinch
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateConfig({ chordFontSize: localFontSize });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [localFontSize]);
+
+  // Lógica de Gesto de Pinça (Pinch to Zoom)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].pageX - e.touches[1].pageX,
+        e.touches[0].pageY - e.touches[1].pageY
+      );
+      initialDist.current = dist;
+      initialFontSize.current = localFontSize;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && initialDist.current !== null) {
+      const dist = Math.hypot(
+        e.touches[0].pageX - e.touches[1].pageX,
+        e.touches[0].pageY - e.touches[1].pageY
+      );
+      
+      const delta = dist / initialDist.current;
+      const newSize = Math.min(Math.max(Math.round(initialFontSize.current * delta), 8), 40);
+      setLocalFontSize(newSize);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    initialDist.current = null;
+  };
 
   if (!lista || lista.cifraIds.length === 0) {
     return (
@@ -44,85 +85,93 @@ const VerLista: React.FC = () => {
   const handleNext = () => setCurrentIndex(prev => Math.min(lista.cifraIds.length - 1, prev + 1));
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {/* HEADER ULTRA COMPACTO E FUNCIONAL */}
-      <div className="sticky top-16 z-40 bg-slate-900 text-white px-2 py-2 shadow-xl">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2">
+    <div className="min-h-screen bg-white flex flex-col overflow-hidden">
+      {/* HEADER COMPACTADO PARA MÁXIMO ESPAÇO */}
+      <div className="sticky top-0 z-40 bg-slate-900 text-white shadow-2xl">
+        <div className="max-w-6xl mx-auto px-1 py-1 flex items-center justify-between gap-1">
           
-          {/* Esquerda: Voltar + Navegação Anterior */}
-          <div className="flex items-center gap-1">
+          {/* Navegação Rápida */}
+          <div className="flex items-center">
             <button 
               onClick={() => navigate('/listas')} 
-              className="p-2 hover:bg-white/10 rounded-full text-slate-400"
-              title="Sair do modo tocar"
+              className="p-2 text-slate-500 hover:text-white"
             >
               <ArrowLeft size={20} />
             </button>
             <button 
               onClick={handlePrev}
               disabled={currentIndex === 0}
-              className={`p-2 rounded-xl transition-all ${currentIndex === 0 ? 'text-white/10' : 'bg-white/10 text-white active:scale-90'}`}
+              className={`p-2 rounded-lg ${currentIndex === 0 ? 'opacity-10' : 'bg-slate-800 active:scale-90'}`}
             >
-              <ChevronLeft size={24} />
+              <ChevronLeft size={20} />
             </button>
           </div>
 
-          {/* Centro: Info da Música */}
-          <div className="flex-1 min-w-0 text-center px-1">
-            <h1 className="text-xs font-bold truncate leading-tight">
+          {/* Info da Música (Fonte Pequena para caber tudo) */}
+          <div className="flex-1 min-w-0 text-center flex flex-col items-center">
+            <h1 className="text-[11px] font-bold truncate w-full max-w-[150px] leading-tight text-amber-400">
               {currentCifra?.titulo || 'Sem título'}
             </h1>
-            <div className="flex items-center justify-center gap-1.5 mt-0.5">
-              <span className="text-[9px] font-black bg-amber-500 text-slate-900 px-1.5 py-0.5 rounded-sm">
-                {currentIndex + 1} / {lista.cifraIds.length}
-              </span>
-              <span className="text-[9px] text-slate-400 font-bold truncate max-w-[80px]">
-                {lista.nome}
+            <div className="flex items-center gap-1.5 leading-none">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                {currentIndex + 1}/{lista.cifraIds.length} • {lista.nome}
               </span>
             </div>
           </div>
 
           {/* Direita: Próxima + Menu */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center">
             <button 
               onClick={handleNext}
               disabled={currentIndex === lista.cifraIds.length - 1}
-              className={`p-2 rounded-xl transition-all ${currentIndex === lista.cifraIds.length - 1 ? 'text-white/10' : 'bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/20 active:scale-90'}`}
+              className={`p-2 rounded-lg mr-1 ${currentIndex === lista.cifraIds.length - 1 ? 'opacity-10' : 'bg-amber-500 text-slate-900 active:scale-90'}`}
             >
-              <ChevronRight size={24} />
+              <ChevronRight size={20} />
             </button>
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2 text-slate-400 hover:text-white"
+              className="p-2 text-slate-500 hover:text-white"
             >
-              <ListIcon size={22} />
+              <ListIcon size={20} />
             </button>
           </div>
         </div>
 
-        {/* Linha Inferior do Header: Apenas Transposição */}
-        <div className="max-w-6xl mx-auto flex justify-center mt-2 pb-1">
+        {/* Linha de Transposição - Ultra Slim */}
+        <div className="bg-slate-800/50 py-1 flex justify-center border-t border-slate-800">
           <TransposeControls 
             amount={currentTranspose} 
             onChange={handleTransposeChange} 
             onReset={() => handleTransposeChange(0)} 
           />
+          {/* Indicador visual de zoom para feedback do gesto */}
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-500 font-bold hidden md:block">
+            {localFontSize}px
+          </div>
         </div>
       </div>
 
-      {/* ÁREA DA CIFRA - AGORA COM MAIS ESPAÇO */}
-      <div className="flex-1 max-w-5xl w-full mx-auto p-1 md:p-6 pb-10">
-        {currentCifra ? (
-          <CifraViewer 
-            conteudo={currentCifra.conteudo} 
-            transposeAmount={currentTranspose} 
-            fontSize={fontSize} 
-          />
-        ) : (
-          <div className="bg-white p-12 rounded-xl text-center text-gray-400">
-            Música não encontrada na biblioteca.
-          </div>
-        )}
+      {/* ÁREA DA CIFRA - BORDA A BORDA COM PINCH ZOOM */}
+      <div 
+        ref={containerRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden touch-none"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="w-full h-full max-w-[100vw]">
+          {currentCifra ? (
+            <CifraViewer 
+              conteudo={currentCifra.conteudo} 
+              transposeAmount={currentTranspose} 
+              fontSize={localFontSize} 
+            />
+          ) : (
+            <div className="p-10 text-center text-gray-400 text-sm">
+              Selecione uma música da lista.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Selector Sidebar */}
@@ -130,16 +179,11 @@ const VerLista: React.FC = () => {
         <div className="fixed inset-0 z-[60] flex justify-end">
            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)}></div>
            <div className="relative w-full max-w-xs bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-slate-50">
-                <div>
-                  <h2 className="font-bold text-lg text-gray-900">Roteiro da Lista</h2>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{lista.nome}</p>
-                </div>
-                <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-gray-200 rounded-full text-gray-400">
-                  <ChevronRight size={24} />
-                </button>
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+                <h2 className="font-bold text-sm text-gray-900 uppercase tracking-widest">Roteiro</h2>
+                <button onClick={() => setIsSidebarOpen(false)} className="p-2 text-gray-400"><ChevronRight size={24} /></button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {lista.cifraIds.map((cid, idx) => {
                   const c = cifras.find(x => x.id === cid);
                   const isActive = idx === currentIndex;
@@ -147,31 +191,15 @@ const VerLista: React.FC = () => {
                     <button
                       key={cid + idx}
                       onClick={() => { setCurrentIndex(idx); setIsSidebarOpen(false); }}
-                      className={`w-full flex items-center gap-3 p-4 rounded-xl text-left border transition-all ${
-                        isActive 
-                          ? 'bg-amber-50 border-amber-300 shadow-sm' 
-                          : 'bg-white border-gray-100 hover:border-gray-200'
+                      className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
+                        isActive ? 'bg-amber-500 text-white' : 'bg-gray-50 text-gray-700'
                       }`}
                     >
-                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black ${
-                        isActive ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        {idx + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className={`font-bold text-sm truncate ${isActive ? 'text-amber-900' : 'text-gray-700'}`}>
-                          {c?.titulo || 'Música s/ Nome'}
-                        </p>
-                        <p className="text-[9px] text-gray-400 font-bold uppercase">{c?.tomBase}</p>
-                      </div>
+                      <span className="text-xs font-black opacity-50">{idx + 1}</span>
+                      <span className="font-bold text-sm truncate">{c?.titulo || 'Sem nome'}</span>
                     </button>
                   );
                 })}
-              </div>
-              <div className="p-4 bg-gray-50 border-t border-gray-100">
-                <Link to={`/listas/editar/${lista.id}`} className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors">
-                  Editar Ordem das Músicas
-                </Link>
               </div>
            </div>
         </div>
