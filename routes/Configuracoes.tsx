@@ -1,14 +1,14 @@
 
-import React, { useState } from 'react';
-import { ArrowLeft, Plus, Trash2, Tag, Cloud, Check, AlertCircle, RefreshCw, Server, HelpCircle, Activity, ShieldCheck, Cpu } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Plus, Trash2, Tag, Cloud, Check, AlertCircle, RefreshCw, Server, HelpCircle, Activity, ShieldCheck, Cpu, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { googleDriveService } from '../services/googleDriveService';
 
 const Configuracoes: React.FC = () => {
-  const { categorias, addCategoria, deleteCategoria, config, updateConfig, clearAllData, isEnvFolderId } = useApp();
+  const { categorias, addCategoria, deleteCategoria, config, updateConfig, clearAllData, effectiveFolderId, isUsingEnvFallback } = useApp();
   const [newCat, setNewCat] = useState('');
-  const [driveId, setDriveId] = useState(config.driveFolderId || '');
+  const [driveIdInput, setDriveIdInput] = useState(config.driveFolderId || '');
   const [testStatus, setTestStatus] = useState<{ok?: boolean, msg?: string, loading?: boolean, time?: number, count?: number}>({});
 
   const handleAdd = () => {
@@ -25,8 +25,10 @@ const Configuracoes: React.FC = () => {
   };
 
   const testDriveAccess = async () => {
-    if (!driveId.trim()) {
-      alert('Configure o ID da pasta primeiro.');
+    const idToTest = driveIdInput.trim() || effectiveFolderId;
+    
+    if (!idToTest) {
+      alert('Nenhum ID configurado no sistema ou no servidor.');
       return;
     }
     
@@ -34,21 +36,21 @@ const Configuracoes: React.FC = () => {
     const startTime = Date.now();
     
     try {
-      // Atualiza o ID da pasta no estado global
-      updateConfig({ driveFolderId: driveId.trim() });
+      // Salva o que o usuário digitou (mesmo que seja vazio para voltar ao fallback)
+      updateConfig({ driveFolderId: driveIdInput.trim() });
       
-      const result = await googleDriveService.testFolderAccess(driveId);
+      const result = await googleDriveService.testFolderAccess(idToTest);
       const endTime = Date.now();
       const duration = (endTime - startTime) / 1000;
 
       if (result && result.ok) {
         setTestStatus({ 
           ok: true, 
-          msg: `Sucesso! Conectado à pasta "${result.name}".`,
+          msg: `Conectado com sucesso à pasta "${result.name}".`,
           count: result.fileCount,
           time: duration
         });
-        await googleDriveService.setConfiguredFolderId(driveId);
+        await googleDriveService.setConfiguredFolderId(idToTest);
       } else {
         setTestStatus({ ok: false, msg: result?.error || 'A pasta não pôde ser acessada.' });
       }
@@ -70,69 +72,83 @@ const Configuracoes: React.FC = () => {
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
           <div className="flex items-center gap-2 text-gray-900 font-bold text-lg">
             <Cloud size={20} className="text-blue-600" />
-            <h2>Pasta de Cifras (Google Drive)</h2>
+            <h2>Pasta de Cifras</h2>
           </div>
-          {isEnvFolderId && (
-            <span className="flex items-center gap-1 bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-tighter">
-              <Cpu size={10} /> Definido via Vercel
-            </span>
-          )}
+          <div className="flex gap-2">
+            {!isUsingEnvFallback && config.driveFolderId && (
+              <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-tighter shadow-sm border border-amber-200">
+                MANDATÓRIO: Manual
+              </span>
+            )}
+            {isUsingEnvFallback && (
+              <span className="flex items-center gap-1 bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-tighter shadow-sm border border-blue-200">
+                <Cpu size={10} /> FALLBACK: Servidor
+              </span>
+            )}
+          </div>
         </div>
+
         <div className="space-y-4">
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-start gap-3">
+            <Info size={18} className="text-slate-400 mt-0.5 shrink-0" />
+            <div className="space-y-1">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Prioridade: O <strong>ID Manual</strong> abaixo sempre será usado primeiro. Se você deixá-lo vazio, o sistema usará o ID padrão configurado pelo administrador no servidor.
+              </p>
+              {isUsingEnvFallback && (
+                <p className="text-[10px] font-mono text-blue-600 font-bold break-all">
+                  Usando agora: {effectiveFolderId}
+                </p>
+              )}
+            </div>
+          </div>
+
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold text-gray-400 uppercase">ID ou Link da Pasta</label>
+            <label className="text-xs font-bold text-gray-400 uppercase">ID de Configuração Manual</label>
             <div className="flex gap-2">
               <input 
                 type="text"
-                className={`flex-1 px-4 py-2 bg-white border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm ${
-                  isEnvFolderId ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'
+                className={`flex-1 px-4 py-2.5 bg-white border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm transition-all ${
+                  !isUsingEnvFallback ? 'border-amber-300 ring-2 ring-amber-50 shadow-sm' : 'border-gray-200'
                 }`}
-                placeholder="ID da pasta no Drive"
-                value={driveId}
-                onChange={e => setDriveId(e.target.value)}
+                placeholder={isUsingEnvFallback ? "Vazio (usando padrão do servidor)" : "Insira o ID da pasta"}
+                value={driveIdInput}
+                onChange={e => setDriveIdInput(e.target.value)}
               />
               <button 
                 onClick={testDriveAccess}
                 disabled={testStatus.loading}
-                className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-200"
               >
                 {testStatus.loading ? <RefreshCw className="animate-spin" size={18} /> : <Activity size={18} />}
-                Testar Carga
+                Testar & Salvar
               </button>
             </div>
-            {isEnvFolderId && (
-              <p className="text-[10px] text-blue-500 font-bold">
-                Dica: O ID acima foi pré-configurado pelo administrador no servidor. Você ainda pode alterá-lo localmente se desejar.
-              </p>
+            {!driveIdInput && isUsingEnvFallback && (
+              <p className="text-[10px] text-gray-400 italic">O campo acima está vazio, portanto o sistema está buscando o ID global.</p>
             )}
-            <p className="text-[10px] text-gray-400 font-medium">A URL da API do Google Script está sendo gerenciada automaticamente pelo sistema.</p>
           </div>
           
           {testStatus.msg && (
-            <div className={`p-4 rounded-2xl border flex flex-col gap-2 ${
+            <div className={`p-4 rounded-2xl border flex flex-col gap-2 animate-in slide-in-from-top-2 duration-300 ${
               testStatus.ok ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'
             }`}>
               <div className="flex items-center gap-2 font-bold">
                 {testStatus.ok ? <ShieldCheck size={20} /> : <AlertCircle size={20} />}
-                <span>{testStatus.ok ? 'Diagnóstico Concluído' : 'Falha no Diagnóstico'}</span>
+                <span>{testStatus.ok ? 'Diagnóstico OK' : 'Falha na Conexão'}</span>
               </div>
               <p className="text-sm">{testStatus.msg}</p>
               {testStatus.ok && (
                 <div className="grid grid-cols-2 gap-4 mt-2 pt-2 border-t border-green-200/50">
                   <div>
-                    <span className="block text-[10px] uppercase font-bold opacity-60">Arquivos Encontrados</span>
+                    <span className="block text-[10px] uppercase font-bold opacity-60">Arquivos .txt</span>
                     <span className="text-lg font-black">{testStatus.count}</span>
                   </div>
                   <div>
-                    <span className="block text-[10px] uppercase font-bold opacity-60">Tempo de Resposta</span>
+                    <span className="block text-[10px] uppercase font-bold opacity-60">Velocidade</span>
                     <span className="text-lg font-black">{testStatus.time?.toFixed(2)}s</span>
                   </div>
                 </div>
-              )}
-              {!testStatus.ok && (
-                <p className="text-xs opacity-80 mt-1 italic">
-                  Dica: Verifique se o ID da pasta está correto e se o Script foi publicado com acesso para "Qualquer pessoa".
-                </p>
               )}
             </div>
           )}
@@ -167,22 +183,18 @@ const Configuracoes: React.FC = () => {
       <section className="space-y-4 pt-6">
         <div className="flex items-center gap-2 text-red-600 font-bold text-lg border-b border-red-100 pb-2">
           <AlertCircle size={20} />
-          <h2>Zona de Perigo</h2>
+          <h2>Manutenção</h2>
         </div>
         <div className="bg-red-50 p-6 rounded-2xl space-y-4 border border-red-100">
-           <p className="text-red-700 text-sm">Esta ação removerá apenas as cópias locais. O Drive permanecerá intacto.</p>
+           <p className="text-red-700 text-sm">Apagar o cache local não afeta seus arquivos no Drive, apenas remove as cópias do navegador.</p>
            <button 
              onClick={handleClearData}
              className="bg-red-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-200"
            >
-             Limpar Cache Local
+             Limpar Dados Locais
            </button>
         </div>
       </section>
-
-      <div className="text-center pt-8 text-gray-400">
-         <p className="text-[10px] font-bold uppercase tracking-widest">Cifras MISSA - Edição Pro Performance</p>
-      </div>
     </div>
   );
 };

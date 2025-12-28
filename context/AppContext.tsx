@@ -20,7 +20,8 @@ interface AppContextType {
   config: AppConfig;
   isSyncing: boolean;
   syncStatus: string;
-  isEnvFolderId: boolean; // Indica se o ID vem do Vercel/Env
+  effectiveFolderId: string; // O ID real que será usado (Manual ou ENV)
+  isUsingEnvFallback: boolean; // Indica se está usando o fallback do servidor
   syncFromDrive: () => Promise<SyncResult>;
   saveToDrive: () => Promise<boolean>;
   addCifra: (cifra: Omit<Cifra, 'id' | 'criadoEm'>) => void;
@@ -46,24 +47,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [categorias, setCategorias] = useState<CategoriaLiturgica[]>(() => storage.get<CategoriaLiturgica[]>('CATEGORIAS') || []);
   
   const [config, setConfig] = useState<AppConfig>(() => {
-    const stored = storage.get<AppConfig>('CONFIG') || { fontSize: 16, chordFontSize: 14, theme: 'light' };
-    
-    // Lógica de prioridade:
-    // 1. Se houver ID no LocalStorage, mantém (preferência do usuário local).
-    // 2. Se não houver ID local mas houver no ENV (Vercel), usa o do ENV.
-    if (!stored.driveFolderId && ENV_DRIVE_ID) {
-      stored.driveFolderId = ENV_DRIVE_ID;
-    }
-    
-    return stored;
+    return storage.get<AppConfig>('CONFIG') || { fontSize: 16, chordFontSize: 14, theme: 'light', driveFolderId: '' };
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
   const syncTimeoutRef = useRef<number | null>(null);
 
-  // Verifica se o ID sendo usado é exatamente o que está no ENV
-  const isEnvFolderId = !!ENV_DRIVE_ID && config.driveFolderId === ENV_DRIVE_ID;
+  // Lógica de Prioridade Conforme Solicitado:
+  // Se o usuário definiu algo no sistema (config.driveFolderId), esse é o mandatório.
+  // Se estiver em branco/vazio, busca da chave de ambiente (ENV).
+  const effectiveFolderId = (config.driveFolderId && config.driveFolderId.trim() !== '') 
+    ? config.driveFolderId.trim() 
+    : ENV_DRIVE_ID;
+
+  const isUsingEnvFallback = !config.driveFolderId && !!ENV_DRIVE_ID;
 
   useEffect(() => storage.set('CIFRAS', cifras), [cifras]);
   useEffect(() => storage.set('LISTAS', listas), [listas]);
@@ -85,7 +83,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const syncFromDrive = async (): Promise<SyncResult> => {
-    if (!config.driveFolderId) {
+    if (!effectiveFolderId) {
       return { success: false, error: 'Configure o ID da pasta nos Ajustes antes de sincronizar.' };
     }
 
@@ -97,6 +95,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     let keptCount = 0;
 
     try {
+      // Configuramos o ID no serviço antes de qualquer chamada
+      await googleDriveService.setConfiguredFolderId(effectiveFolderId);
+      
       setSyncStatus('Lendo arquivos da pasta...');
       const driveFiles = await googleDriveService.getAllTextFiles();
       
@@ -160,9 +161,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const saveToDrive = async (): Promise<boolean> => {
-    if (!config.driveFolderId) return false;
+    if (!effectiveFolderId) return false;
     setIsSyncing(true);
     try {
+      await googleDriveService.setConfiguredFolderId(effectiveFolderId);
       await googleDriveService.saveUserLists(listas);
       const meta = { 
         metaPorCifraId: cifras.reduce((acc, c) => ({
@@ -219,7 +221,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      cifras, listas, categorias, config, isSyncing, syncStatus, isEnvFolderId,
+      cifras, listas, categorias, config, isSyncing, syncStatus, effectiveFolderId, isUsingEnvFallback,
       syncFromDrive, saveToDrive,
       addCifra, updateCifra, deleteCifra,
       addLista, updateLista, deleteLista,
