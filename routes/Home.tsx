@@ -5,8 +5,10 @@ import { Book, List, Settings, HelpCircle, ChevronRight, Music, Cloud, AlertTria
 import { useApp } from '../context/AppContext';
 
 const Home: React.FC = () => {
-  const { cifras, listas, config } = useApp();
-  const hasDriveConfig = !!config.driveFolderId;
+  const { cifras, listas, effectiveFolderId } = useApp();
+  
+  // Agora verificamos o effectiveFolderId, que engloba tanto o manual quanto o do Vercel
+  const hasDriveConfig = !!effectiveFolderId;
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 space-y-8">
@@ -30,6 +32,24 @@ const Home: React.FC = () => {
               className="inline-flex items-center gap-2 bg-amber-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-md hover:bg-amber-700 transition-colors"
             >
               Ir para Ajustes agora <ChevronRight size={16} />
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {hasDriveConfig && cifras.length === 0 && (
+        <div className="bg-blue-50 border-2 border-blue-100 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6">
+          <div className="bg-blue-100 p-4 rounded-full text-blue-600">
+            <Cloud size={32} />
+          </div>
+          <div className="flex-1 text-center md:text-left space-y-2">
+            <h3 className="text-blue-900 font-bold text-lg">Pronto para Sincronizar</h3>
+            <p className="text-blue-700 text-sm">Sua pasta está conectada! Vá para a biblioteca para baixar suas cifras pela primeira vez.</p>
+            <Link 
+              to="/biblioteca" 
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-md hover:bg-blue-700 transition-colors"
+            >
+              Ir para Biblioteca <ChevronRight size={16} />
             </Link>
           </div>
         </div>
@@ -84,11 +104,11 @@ const Home: React.FC = () => {
               <span className="text-[10px] font-black opacity-50 uppercase">Passo 1</span>
               <p className="text-sm font-bold">Configure o ID da Pasta do Drive nos <strong>Ajustes</strong>.</p>
            </div>
-           <div className="space-y-2 p-4 rounded-2xl bg-slate-800/50 border border-slate-700 opacity-80">
+           <div className={`space-y-2 p-4 rounded-2xl border ${hasDriveConfig && cifras.length === 0 ? 'bg-blue-600 border-blue-500' : 'bg-slate-800/50 border-slate-700 opacity-80'}`}>
               <span className="text-[10px] font-black opacity-50 uppercase">Passo 2</span>
               <p className="text-sm font-bold">Vá na <strong>Biblioteca</strong> e clique em Sincronizar.</p>
            </div>
-           <div className="space-y-2 p-4 rounded-2xl bg-slate-800/50 border border-slate-700 opacity-80">
+           <div className={`space-y-2 p-4 rounded-2xl border ${cifras.length > 0 ? 'bg-blue-600 border-blue-500' : 'bg-slate-800/50 border-slate-700 opacity-80'}`}>
               <span className="text-[10px] font-black opacity-50 uppercase">Passo 3</span>
               <p className="text-sm font-bold">Crie suas <strong>Listas</strong> e toque com transposição.</p>
            </div>
