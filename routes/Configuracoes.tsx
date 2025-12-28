@@ -185,7 +185,7 @@ function doPost(e) {
               <div className="space-y-3">
                 <p className="font-bold">Checklist Final no Google Script:</p>
                 <ul className="space-y-2">
-                   <li className="flex gap-2 items-start text-xs"><Check size={14} className="text-green-500 mt-0.5" /> Clique em <strong>Implantar > Nova Implantação</strong>.</li>
+                   <li className="flex gap-2 items-start text-xs"><Check size={14} className="text-green-500 mt-0.5" /> Clique em <strong>Implantar &gt; Nova Implantação</strong>.</li>
                    <li className="flex gap-2 items-start text-xs"><Check size={14} className="text-green-500 mt-0.5" /> Tipo: <strong>App da Web</strong>.</li>
                    <li className="flex gap-2 items-start text-xs"><Check size={14} className="text-green-500 mt-0.5" /> Quem tem acesso: <strong>Qualquer pessoa (Anyone)</strong>.</li>
                    <li className="flex gap-2 items-start text-xs"><Check size={14} className="text-green-500 mt-0.5" /> Copie a URL gerada e coloque na variável <strong>google_api</strong> da Vercel.</li>
