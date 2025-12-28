@@ -1,70 +1,51 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Trash2, Tag, Cloud, AlertCircle, RefreshCw, Activity, ShieldCheck, Info, Code, Copy, Check, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Tag, Cloud, AlertCircle, RefreshCw, Activity, ShieldCheck, Info, Code, Link as LinkIcon, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { googleDriveService } from '../services/googleDriveService';
 
 const Configuracoes: React.FC = () => {
-  const { categorias, addCategoria, deleteCategoria, config, updateConfig, clearAllData, effectiveFolderId, isUsingEnvFallback } = useApp();
+  const { categorias, addCategoria, deleteCategoria, config, updateConfig, clearAllData, effectiveFolderId, effectiveApiUrl } = useApp();
   const [newCat, setNewCat] = useState('');
+  
   const [driveIdInput, setDriveIdInput] = useState(config.driveFolderId || '');
-  const [testStatus, setTestStatus] = useState<{ok?: boolean, msg?: string, loading?: boolean, time?: number, count?: number}>({});
+  const [apiUrlInput, setApiUrlInput] = useState(config.googleApiUrl || '');
+  
+  const [testStatus, setTestStatus] = useState<{ok?: boolean, msg?: string, loading?: boolean}>({});
   const [showHelper, setShowHelper] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const isApiConfigured = googleDriveService.isApiConfigured();
-  const currentApiUrl = googleDriveService.getApiUrl();
 
   const handleClearData = () => {
-    if (window.confirm('Tem certeza que deseja apagar todos os dados locais? Isso não afetará os arquivos no seu Google Drive.')) {
+    if (window.confirm('Tem certeza? Isso apagará as cifras do celular, mas não do Drive.')) {
       clearAllData();
-      alert('Dados locais limpos com sucesso.');
+      alert('Dados locais limpos.');
     }
   };
 
-  const handleCopyCode = () => {
-    const code = `function doGet(e) {
-  var result = handleRequest(e.parameter.method, JSON.parse(e.parameter.args || "[]"));
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
-  var result = handleRequest(data.method, data.args || []);
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function handleRequest(method, args) {
-  try {
-    // ... sua lógica de acesso ao Drive ...
-    return { ok: true, data: "Sucesso" }; 
-  } catch(e) {
-    return { ok: false, error: e.toString() };
-  }
-}`;
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const saveManualConfigs = () => {
+    updateConfig({ 
+      driveFolderId: driveIdInput.trim(),
+      googleApiUrl: apiUrlInput.trim() 
+    });
+    alert('Configurações salvas localmente!');
   };
 
-  const testDriveAccess = async () => {
-    const idToTest = driveIdInput.trim() || effectiveFolderId;
-    if (!isApiConfigured) return;
+  const testConnection = async () => {
+    if (!apiUrlInput.trim() && !effectiveApiUrl) {
+      alert('Configure a URL da API primeiro.');
+      return;
+    }
+    
     setTestStatus({ loading: true });
-    const startTime = Date.now();
     try {
-      updateConfig({ driveFolderId: driveIdInput.trim() });
+      // Forçamos a URL no serviço para o teste
+      const urlToTest = apiUrlInput.trim() || effectiveApiUrl;
+      googleDriveService.setApiUrl(urlToTest);
+      
+      const idToTest = driveIdInput.trim() || effectiveFolderId;
       const result = await googleDriveService.testFolderAccess(idToTest);
-      const endTime = Date.now();
-      setTestStatus({ 
-        ok: true, 
-        msg: `Conectado à pasta "${result.name}".`,
-        count: result.fileCount,
-        time: (endTime - startTime) / 1000
-      });
+      
+      setTestStatus({ ok: true, msg: `Conectado com sucesso à pasta: ${result.name}` });
     } catch (e: any) {
       setTestStatus({ ok: false, msg: e.message });
     }
@@ -77,121 +58,83 @@ function handleRequest(method, args) {
           <Link to="/" className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><ArrowLeft size={24} /></Link>
           <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
         </div>
-        <button 
-          onClick={() => setShowHelper(true)}
-          className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100 transition-colors"
-        >
-          <Code size={16} /> Resolver Erro de Conexão
-        </button>
       </div>
 
-      {/* STATUS DA API DO GOOGLE */}
-      <section className="space-y-4">
+      <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
         <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-2">
           <LinkIcon size={20} className="text-blue-600" />
-          <h2>Conexão com Google Script</h2>
+          <h2>Conexão com Google Drive</h2>
         </div>
 
-        {!isApiConfigured ? (
-          <div className="bg-red-50 border-2 border-red-200 p-6 rounded-3xl flex flex-col md:flex-row items-center gap-4 animate-pulse">
-            <AlertCircle className="text-red-500 shrink-0" size={32} />
-            <div className="space-y-1 text-center md:text-left">
-              <h3 className="font-black text-red-900 uppercase text-sm tracking-tight">API Não Encontrada</h3>
-              <p className="text-xs text-red-700">A variável <strong>GOOGLE_API</strong> não foi detectada no Vercel.</p>
-            </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">URL do Google Script (API)</label>
+            <input 
+              type="text"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+              placeholder="https://script.google.com/macros/s/.../exec"
+              value={apiUrlInput}
+              onChange={e => setApiUrlInput(e.target.value)}
+            />
           </div>
-        ) : (
-          <div className="bg-green-50 border border-green-100 p-4 rounded-2xl flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-green-500 text-white p-1.5 rounded-full"><Check size={16} /></div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-black text-green-700 uppercase">API Ativa (Vercel)</p>
-                <p className="text-[10px] text-green-600 font-mono truncate max-w-[200px] md:max-w-md opacity-60">{currentApiUrl}</p>
-              </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">ID da Pasta de Cifras</label>
+            <input 
+              type="text"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+              placeholder="Ex: 13IP0VfS..."
+              value={driveIdInput}
+              onChange={e => setDriveIdInput(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button 
+              onClick={saveManualConfigs}
+              className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors"
+            >
+              Salvar Ajustes
+            </button>
+            <button 
+              onClick={testConnection}
+              disabled={testStatus.loading}
+              className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+            >
+              {testStatus.loading ? <RefreshCw className="animate-spin" size={18} /> : <Activity size={18} />} Testar
+            </button>
+          </div>
+        </div>
+
+        {testStatus.msg && (
+          <div className={`p-4 rounded-2xl border flex flex-col gap-2 ${testStatus.ok ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+            <div className="flex items-center gap-2 font-bold text-sm">
+              {testStatus.ok ? <ShieldCheck size={18} /> : <AlertCircle size={18} />}
+              <span>{testStatus.ok ? 'Conexão OK' : 'Falha na Conexão'}</span>
             </div>
-            <span className="bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded uppercase border border-green-200">Pronto</span>
+            <p className="text-xs">{testStatus.msg}</p>
+            {!testStatus.ok && (
+              <button onClick={() => setShowHelper(true)} className="text-[10px] font-black uppercase underline text-left">Como resolver erro de CORS?</button>
+            )}
           </div>
         )}
       </section>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-          <div className="flex items-center gap-2 text-gray-900 font-bold text-lg"><Cloud size={20} className="text-blue-600" /><h2>Pasta de Cifras</h2></div>
-          <div className="flex gap-2">
-            {!isUsingEnvFallback && config.driveFolderId && <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-1 rounded-full border border-amber-200 uppercase">Manual</span>}
-            {isUsingEnvFallback && <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-full border border-blue-200 uppercase">Servidor</span>}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold text-gray-400 uppercase">ID da Pasta no Drive</label>
-            <div className="flex gap-2">
-              <input 
-                type="text"
-                className="flex-1 px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                placeholder="Ex: 13IP0VfS..."
-                value={driveIdInput}
-                onChange={e => setDriveIdInput(e.target.value)}
-              />
-              <button 
-                onClick={testDriveAccess}
-                disabled={testStatus.loading || !isApiConfigured}
-                className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 disabled:opacity-30"
-              >
-                {testStatus.loading ? <RefreshCw className="animate-spin" size={18} /> : <Activity size={18} />} Testar
-              </button>
-            </div>
-          </div>
-          
-          {testStatus.msg && (
-            <div className={`p-4 rounded-2xl border flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 ${testStatus.ok ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
-              <div className="flex items-center gap-2 font-bold">
-                {testStatus.ok ? <ShieldCheck size={20} /> : <AlertCircle size={20} />}
-                <span>{testStatus.ok ? 'Sucesso' : 'Erro de Conexão'}</span>
-              </div>
-              <p className="text-xs leading-relaxed">{testStatus.msg}</p>
-              {!testStatus.ok && (
-                <button onClick={() => setShowHelper(true)} className="text-[10px] font-black uppercase underline text-left mt-1">Como resolver o erro de CORS?</button>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* MODAL DE AJUDA TÉCNICA */}
+      {/* MODAL DE AJUDA */}
       {showHelper && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">Guia de Correção (CORS)</h2>
-              <button onClick={() => setShowHelper(false)} className="text-gray-400 hover:text-gray-600">Fechar</button>
-            </div>
-            <div className="p-6 overflow-y-auto space-y-6 text-sm">
-              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 space-y-2">
-                <p className="font-bold text-amber-900 flex items-center gap-2"><Info size={18} /> Por que o erro acontece?</p>
-                <p className="text-amber-800 text-xs leading-relaxed">O Google bloqueia acessos externos se o seu Script não estiver configurado corretamente. O erro de CORS geralmente indica que o Script <strong>não está publicado para Qualquer Pessoa</strong>.</p>
-              </div>
-
-              <div className="space-y-3">
-                <p className="font-bold">Passos Obrigatórios no Google Script:</p>
-                <ol className="space-y-3 list-decimal pl-5">
-                   <li className="text-xs">No editor do script, clique em <strong>Implantar &gt; Nova Implantação</strong>.</li>
-                   <li className="text-xs font-bold text-blue-600">Selecione o tipo: <strong>App da Web</strong>.</li>
-                   <li className="text-xs">Executar como: <strong>Eu (Seu E-mail)</strong>.</li>
-                   <li className="text-xs font-bold text-red-600">Quem tem acesso: <strong>Qualquer pessoa (Anyone)</strong>. <span className="font-normal text-gray-500 italic">- Este passo é o que resolve o CORS.</span></li>
-                   <li className="text-xs">Copie a URL gerada e atualize a variável <strong>GOOGLE_API</strong> no seu painel da Vercel.</li>
-                </ol>
-              </div>
-
-              <div className="bg-slate-900 text-white p-4 rounded-xl space-y-2">
-                <p className="text-[10px] font-black text-slate-500 uppercase">Dica de Ouro</p>
-                <p className="text-xs leading-relaxed">Se você usa várias contas do Google no mesmo navegador, o Google pode se confundir nos redirecionamentos. Tente testar em uma <strong>janela anônima</strong>.</p>
-              </div>
-            </div>
-            <div className="p-6 border-t border-gray-100">
-               <button onClick={() => setShowHelper(false)} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200">Entendi, vou revisar a publicação</button>
-            </div>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-3xl p-6 space-y-4">
+            <h2 className="text-xl font-bold">Erro de CORS / Acesso</h2>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Isso acontece quando o Google Script bloqueia o navegador. Para corrigir:
+            </p>
+            <ol className="text-xs space-y-2 list-decimal pl-4 text-gray-700">
+              <li>No Google Script, clique em <strong>Implantar > Nova Implantação</strong>.</li>
+              <li>Tipo: <strong>App da Web</strong>.</li>
+              <li>Quem tem acesso: <strong className="text-red-600">Qualquer pessoa (Anyone)</strong>.</li>
+              <li>Clique em Implantar e <strong>copie a nova URL</strong> gerada.</li>
+            </ol>
+            <button onClick={() => setShowHelper(false)} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold">Entendi</button>
           </div>
         </div>
       )}
@@ -217,12 +160,10 @@ function handleRequest(method, args) {
       </section>
 
       {/* MANUTENÇÃO */}
-      <section className="space-y-4 pt-6">
-        <div className="flex items-center gap-2 text-red-600 font-bold text-lg border-b border-red-100 pb-2"><AlertCircle size={20} /><h2>Manutenção</h2></div>
-        <div className="bg-red-50 p-6 rounded-2xl space-y-4 border border-red-100">
-           <p className="text-red-700 text-sm font-medium">Cuidado: Limpar os dados locais removerá todas as cifras e listas salvas no navegador. Seus arquivos no Google Drive não serão afetados.</p>
-           <button onClick={handleClearData} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-md shadow-red-200">Limpar Tudo e Resetar App</button>
-        </div>
+      <section className="bg-red-50 p-6 rounded-3xl border border-red-100 space-y-4">
+        <h2 className="text-red-600 font-bold flex items-center gap-2"><AlertCircle size={20} /> Perigo</h2>
+        <p className="text-xs text-red-700">Apagar os dados locais resetará o app. As cifras no seu Drive não serão deletadas.</p>
+        <button onClick={handleClearData} className="bg-red-600 text-white px-6 py-2.5 rounded-xl font-bold">Resetar Dados Locais</button>
       </section>
     </div>
   );

@@ -31,5 +31,6 @@ export interface AppConfig {
   chordFontSize: number;
   theme: 'light' | 'dark';
   driveFolderId?: string;
+  googleApiUrl?: string; // Novo campo para configuração manual
   lastSync?: string;
 }

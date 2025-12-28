@@ -21,10 +21,10 @@ interface AppContextType {
   isSyncing: boolean;
   syncStatus: string;
   effectiveFolderId: string;
-  isUsingEnvFallback: boolean;
+  effectiveApiUrl: string;
   syncFromDrive: () => Promise<SyncResult>;
   saveToDrive: () => Promise<boolean>;
-  sortLibrary: () => void; // Novo comando exposto
+  sortLibrary: () => void;
   addCifra: (cifra: Omit<Cifra, 'id' | 'criadoEm'>) => void;
   updateCifra: (id: string, cifra: Partial<Cifra>) => void;
   deleteCifra: (id: string) => void;
@@ -40,6 +40,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const ENV_DRIVE_ID = (process.env as any).DRIVE_FOLDER_ID || '';
+const ENV_API_URL = (process.env as any).GOOGLE_API || '';
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [cifras, setCifras] = useState<Cifra[]>(() => storage.get<Cifra[]>('CIFRAS') || []);
@@ -47,39 +48,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [categorias, setCategorias] = useState<CategoriaLiturgica[]>(() => storage.get<CategoriaLiturgica[]>('CATEGORIAS') || []);
   
   const [config, setConfig] = useState<AppConfig>(() => {
-    return storage.get<AppConfig>('CONFIG') || { fontSize: 16, chordFontSize: 14, theme: 'light', driveFolderId: '' };
+    return storage.get<AppConfig>('CONFIG') || { fontSize: 16, chordFontSize: 14, theme: 'light', driveFolderId: '', googleApiUrl: '' };
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
-  const syncTimeoutRef = useRef<number | null>(null);
+  
+  const effectiveFolderId = config.driveFolderId?.trim() || ENV_DRIVE_ID;
+  const effectiveApiUrl = config.googleApiUrl?.trim() || ENV_API_URL;
 
-  const effectiveFolderId = (config.driveFolderId && config.driveFolderId.trim() !== '') 
-    ? config.driveFolderId.trim() 
-    : ENV_DRIVE_ID;
-
-  const isUsingEnvFallback = !config.driveFolderId && !!ENV_DRIVE_ID;
+  // Atualiza o serviço sempre que a URL efetiva mudar
+  useEffect(() => {
+    if (effectiveApiUrl) {
+      googleDriveService.setApiUrl(effectiveApiUrl);
+    }
+  }, [effectiveApiUrl]);
 
   useEffect(() => storage.set('CIFRAS', cifras), [cifras]);
   useEffect(() => storage.set('LISTAS', listas), [listas]);
   useEffect(() => storage.set('CATEGORIAS', categorias), [categorias]);
   useEffect(() => storage.set('CONFIG', config), [config]);
 
-  // Função auxiliar para ordenar cifras
   const getSortedCifras = (list: Cifra[]) => {
     return [...list].sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR', { sensitivity: 'base' }));
   };
 
-  const sortLibrary = () => {
-    setCifras(prev => getSortedCifras(prev));
-  };
-
-  const scheduleDriveSave = () => {
-    if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
-    syncTimeoutRef.current = window.setTimeout(() => {
-      saveToDrive();
-    }, 5000);
-  };
+  const sortLibrary = () => setCifras(prev => getSortedCifras(prev));
 
   const clearAllData = () => {
     setCifras([]);
@@ -89,28 +83,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const syncFromDrive = async (): Promise<SyncResult> => {
-    if (!effectiveFolderId) {
-      return { success: false, error: 'Configure o ID da pasta nos Ajustes antes de sincronizar.' };
-    }
+    if (!effectiveApiUrl) return { success: false, error: 'URL da API não configurada. Verifique os Ajustes.' };
+    if (!effectiveFolderId) return { success: false, error: 'ID da Pasta não configurado. Verifique os Ajustes.' };
 
     setIsSyncing(true);
-    setSyncStatus('Conectando ao Google Drive...');
+    setSyncStatus('Conectando...');
     
-    let newCount = 0;
-    let updatedCount = 0;
-    let keptCount = 0;
-
     try {
       await googleDriveService.setConfiguredFolderId(effectiveFolderId);
-      
-      setSyncStatus('Lendo arquivos da pasta...');
       const driveFiles = await googleDriveService.getAllTextFiles();
-      
-      setSyncStatus('Sincronizando listas e preferências...');
       const driveListas = await googleDriveService.getUserLists();
       
+      let newCount = 0, updatedCount = 0, keptCount = 0;
+
       if (Array.isArray(driveFiles)) {
-        setSyncStatus(`Comparando ${driveFiles.length} arquivos...`);
         const localCifrasMap = new Map(cifras.map(c => [c.driveId || c.titulo, c]));
         const updatedList: Cifra[] = [];
 
@@ -119,7 +105,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const hasChanged = !localMatch || localMatch.ultimaAtualizacao !== file.ultimaAtualizacao;
 
           if (hasChanged) {
-            const cifraData: Cifra = {
+            updatedList.push({
               id: localMatch ? localMatch.id : Math.random().toString(36).substring(2, 11),
               driveId: file.id,
               titulo: file.nome,
@@ -129,38 +115,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               tags: localMatch ? localMatch.tags : [],
               criadoEm: localMatch ? localMatch.criadoEm : new Date().toISOString(),
               ultimaAtualizacao: file.ultimaAtualizacao
-            };
+            });
             if (localMatch) updatedCount++; else newCount++;
-            updatedList.push(cifraData);
           } else {
             keptCount++;
             if (localMatch) updatedList.push(localMatch);
           }
         });
-
-        cifras.forEach(local => {
-          const driveTitles = new Set(driveFiles.map((f: any) => f.nome));
-          if (!local.driveId && !driveTitles.has(local.titulo)) {
-            updatedList.push(local);
-          }
-        });
-        
-        // ORDENAÇÃO AUTOMÁTICA APÓS SINCRONIZAÇÃO
         setCifras(getSortedCifras(updatedList));
       }
 
-      if (Array.isArray(driveListas) && driveListas.length > 0) {
-        setListas(driveListas);
-      }
+      if (Array.isArray(driveListas)) setListas(driveListas);
 
-      const totalCount = driveFiles?.length || 0;
       setConfig(prev => ({ ...prev, lastSync: new Date().toISOString() }));
-      setSyncStatus('Sincronização concluída!');
-      
-      return { success: true, count: totalCount, newCount, updatedCount, keptCount };
+      return { success: true, count: driveFiles.length, newCount, updatedCount, keptCount };
     } catch (e: any) {
-      console.error('Erro na sincronização:', e);
-      return { success: false, error: e.message || 'Erro de conexão.' };
+      return { success: false, error: e.message };
     } finally {
       setIsSyncing(false);
       setSyncStatus('');
@@ -168,21 +138,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const saveToDrive = async (): Promise<boolean> => {
-    if (!effectiveFolderId) return false;
+    if (!effectiveApiUrl || !effectiveFolderId) return false;
     setIsSyncing(true);
     try {
       await googleDriveService.setConfiguredFolderId(effectiveFolderId);
       await googleDriveService.saveUserLists(listas);
-      const meta = { 
-        metaPorCifraId: cifras.reduce((acc, c) => ({
-          ...acc, 
-          [c.id]: { tom: c.tomBase, categorias: c.categorias }
-        }), {})
-      };
-      await googleDriveService.saveUserMeta(meta);
       return true;
     } catch (e) {
-      console.error('Erro ao salvar:', e);
       return false;
     } finally {
       setIsSyncing(false);
@@ -190,49 +152,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addCifra = (data: Omit<Cifra, 'id' | 'criadoEm'>) => {
-    const newCifra: Cifra = { ...data, id: Math.random().toString(36).substring(2, 11), criadoEm: new Date().toISOString() };
-    // Adiciona e ordena
-    setCifras(prev => getSortedCifras([newCifra, ...prev]));
-    scheduleDriveSave();
+    const n = { ...data, id: Math.random().toString(36).substring(2, 11), criadoEm: new Date().toISOString() };
+    setCifras(prev => getSortedCifras([n, ...prev]));
   };
 
   const updateCifra = (id: string, data: Partial<Cifra>) => {
     setCifras(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
-    scheduleDriveSave();
   };
 
-  const deleteCifra = (id: string) => {
-    setCifras(prev => prev.filter(c => c.id !== id));
-    scheduleDriveSave();
-  };
-
+  const deleteCifra = (id: string) => setCifras(prev => prev.filter(c => c.id !== id));
+  
   const addLista = (data: Omit<Lista, 'id' | 'criadoEm' | 'atualizadoEm'>) => {
     const now = new Date().toISOString();
-    const newLista: Lista = { ...data, id: Math.random().toString(36).substring(2, 11), criadoEm: now, atualizadoEm: now };
-    setListas(prev => [newLista, ...prev]);
-    scheduleDriveSave();
+    setListas(prev => [{ ...data, id: Math.random().toString(36).substring(2, 11), criadoEm: now, atualizadoEm: now }, ...prev]);
   };
 
   const updateLista = (id: string, data: Partial<Lista>) => {
     setListas(prev => prev.map(l => l.id === id ? { ...l, ...data, atualizadoEm: new Date().toISOString() } : l));
-    scheduleDriveSave();
   };
 
-  const deleteLista = (id: string) => {
-    setListas(prev => prev.filter(l => l.id !== id));
-    scheduleDriveSave();
-  };
-
+  const deleteLista = (id: string) => setListas(prev => prev.filter(l => l.id !== id));
   const addCategoria = (nome: string) => setCategorias(prev => [...prev, { id: Math.random().toString(36).substring(2, 11), nome }]);
   const deleteCategoria = (id: string) => setCategorias(prev => prev.filter(c => c.id !== id));
   const updateConfig = (newConfig: Partial<AppConfig>) => setConfig(prev => ({ ...prev, ...newConfig }));
 
   return (
     <AppContext.Provider value={{
-      cifras, listas, categorias, config, isSyncing, syncStatus, effectiveFolderId, isUsingEnvFallback,
+      cifras, listas, categorias, config, isSyncing, syncStatus, effectiveFolderId, effectiveApiUrl,
       syncFromDrive, saveToDrive, sortLibrary,
-      addCifra, updateCifra, deleteCifra,
-      addLista, updateLista, deleteLista,
+      addCifra, updateCifra, deleteCifra, addLista, updateLista, deleteLista,
       addCategoria, deleteCategoria, updateConfig, clearAllData
     }}>
       {children}

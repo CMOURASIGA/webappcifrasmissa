@@ -1,7 +1,6 @@
 
 /**
  * Este serviço gerencia a comunicação com o Google Apps Script.
- * Analisa variáveis de ambiente e configurações manuais.
  */
 
 declare const google: any;
@@ -14,15 +13,7 @@ const extractFolderId = (input: string): string => {
   return input.trim();
 };
 
-const getApiUrl = () => {
-  // Análise robusta: tenta buscar do process.env (Vercel) ou de uma variável global
-  const api = (
-    (process.env as any).GOOGLE_API || 
-    (process.env as any).google_api || 
-    ''
-  ).trim();
-  return api;
-};
+let currentRuntimeApiUrl = '';
 
 const run = async (methodName: string, ...args: any[]): Promise<any> => {
   // 1. Ambiente Google Apps Script (se embutido)
@@ -34,11 +25,9 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     });
   }
 
-  // 2. Ambiente Externo (Vercel/Local)
-  const apiUrl = getApiUrl();
-  
-  if (!apiUrl) {
-    throw new Error('Configuração Ausente: A variável GOOGLE_API não foi definida no Vercel ou no ambiente.');
+  // 2. Ambiente Externo
+  if (!currentRuntimeApiUrl) {
+    throw new Error('URL da API não configurada. Vá em Ajustes.');
   }
 
   try {
@@ -46,20 +35,20 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     
     let response;
     
+    // Para Google Apps Script, o POST deve ser o mais simples possível
     if (isSaveMethod) {
-      // POST para GAS: Enviamos como text/plain para evitar Preflight OPTIONS (erro comum de CORS)
-      response = await fetch(apiUrl, {
+      response = await fetch(currentRuntimeApiUrl, {
         method: 'POST',
         mode: 'cors',
-        redirect: 'follow', // Crucial para o Google Apps Script
+        redirect: 'follow',
+        // Não definimos Content-Type para evitar Preflight OPTIONS (causa de erro de CORS)
         body: JSON.stringify({
           method: methodName,
           args: args
         })
       });
     } else {
-      // GET para GAS
-      const urlWithParams = new URL(apiUrl);
+      const urlWithParams = new URL(currentRuntimeApiUrl);
       urlWithParams.searchParams.append('method', methodName);
       urlWithParams.searchParams.append('args', JSON.stringify(args));
       
@@ -72,25 +61,28 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     }
 
     if (!response.ok) {
-      if (response.status === 404) throw new Error('Script não encontrado (404). Verifique a URL da API.');
-      throw new Error(`Erro HTTP ${response.status}. Verifique se o script está publicado como "Anyone".`);
+      throw new Error(`Erro HTTP ${response.status}. Verifique a publicação do script.`);
     }
 
     const data = await response.json();
-    if (data && data.ok === false) throw new Error(data.error || 'Erro no Google Script.');
+    if (data && data.ok === false) throw new Error(data.error || 'Erro interno no Script.');
     return data;
 
   } catch (e: any) {
-    if (e.name === 'TypeError' && e.message.includes('fetch')) {
-      throw new Error('Bloqueio de CORS: O Google Script não permitiu o acesso. Verifique se ele foi publicado como "Qualquer Pessoa" (Anyone).');
+    console.error('Fetch error:', e);
+    if (e.name === 'TypeError' || e.message.includes('fetch')) {
+      throw new Error('Falha de Conexão/CORS. Verifique se o Script está publicado como "Qualquer Pessoa" (Anyone).');
     }
     throw e;
   }
 };
 
 export const googleDriveService = {
-  isApiConfigured: () => !!getApiUrl(),
-  getApiUrl: () => getApiUrl(),
+  setApiUrl: (url: string) => {
+    currentRuntimeApiUrl = url.trim();
+  },
+  // Fix: Property 'isApiConfigured' does not exist on type
+  isApiConfigured: () => !!currentRuntimeApiUrl,
   getConfiguredFolderId: () => run('getConfiguredFolderId'),
   setConfiguredFolderId: (id: string) => run('setConfiguredFolderId', extractFolderId(id)),
   testFolderAccess: (id: string) => run('testFolderAccess', extractFolderId(id)),
