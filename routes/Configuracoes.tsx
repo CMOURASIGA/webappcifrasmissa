@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Trash2, Tag, Layout, Cloud, Check, AlertCircle, RefreshCw, Link as LinkIcon, Server } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Tag, Cloud, Check, AlertCircle, RefreshCw, Server, HelpCircle, Copy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { googleDriveService } from '../services/googleDriveService';
@@ -19,8 +19,8 @@ const Configuracoes: React.FC = () => {
   };
 
   const saveGasUrl = () => {
-    updateConfig({ gasApiUrl: gasUrl });
-    alert('URL da API salva com sucesso!');
+    updateConfig({ gasApiUrl: gasUrl.trim() });
+    alert('URL da API salva!');
   };
 
   const testDriveAccess = async () => {
@@ -28,15 +28,15 @@ const Configuracoes: React.FC = () => {
     setTestStatus({ loading: true });
     try {
       const result = await googleDriveService.testFolderAccess(driveId);
-      if (result.ok) {
-        setTestStatus({ ok: true, msg: `Conectado a: ${result.name} (${result.fileCount} arquivos encontrados)` });
+      if (result && result.ok) {
+        setTestStatus({ ok: true, msg: `Conectado! Pasta: ${result.name} (${result.fileCount} músicas)` });
         updateConfig({ driveFolderId: driveId });
         await googleDriveService.setConfiguredFolderId(driveId);
       } else {
-        setTestStatus({ ok: false, msg: result.error || 'Erro desconhecido' });
+        setTestStatus({ ok: false, msg: result?.error || 'A pasta não pôde ser acessada.' });
       }
     } catch (e) {
-      setTestStatus({ ok: false, msg: 'Erro na comunicação. Verifique se o URL da API está correto e se o Web App foi publicado como "Qualquer pessoa".' });
+      setTestStatus({ ok: false, msg: 'Erro técnico de conexão. Certifique-se de que o Script está publicado como "Qualquer pessoa" e não tem erros de código.' });
     }
   };
 
@@ -49,13 +49,12 @@ const Configuracoes: React.FC = () => {
         <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
       </div>
 
-      {/* Configuração de API para Vercel */}
       <section className="space-y-4">
         <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-2">
           <Server size={20} className="text-purple-600" />
-          <h2>Conexão com Backend (Vercel)</h2>
+          <h2>1. Conexão com Backend (Google Script)</h2>
         </div>
-        <p className="text-gray-500 text-sm">Para rodar fora do Google (Vercel), você precisa publicar seu Script como Web App e colar o URL aqui.</p>
+        <p className="text-gray-500 text-sm">Cole o URL do seu Web App publicado no Google Apps Script.</p>
         
         <div className="flex gap-2">
           <input 
@@ -69,24 +68,36 @@ const Configuracoes: React.FC = () => {
             onClick={saveGasUrl}
             className="bg-purple-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-purple-700 transition-colors"
           >
-            Salvar API
+            Salvar URL
           </button>
+        </div>
+
+        <div className="bg-blue-50 p-4 rounded-xl space-y-3">
+          <h3 className="text-blue-800 font-bold text-sm flex items-center gap-2">
+            <HelpCircle size={16} /> Instruções Importantes:
+          </h3>
+          <ul className="text-blue-700 text-xs space-y-1 list-disc pl-4">
+            <li>No Script, clique em <b>Implantar > Nova implantação</b>.</li>
+            <li>Tipo: <b>App da Web</b>.</li>
+            <li>Quem pode acessar: <b>Qualquer pessoa</b> (isso é vital para o Vercel funcionar).</li>
+            <li>O código deve conter a função <code>doGet(e)</code> que processe o parâmetro <code>method</code>.</li>
+          </ul>
         </div>
       </section>
 
       <section className="space-y-4">
         <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-2">
           <Cloud size={20} className="text-blue-600" />
-          <h2>Google Drive</h2>
+          <h2>2. Google Drive</h2>
         </div>
-        <p className="text-gray-500 text-sm">Configure o ID da pasta do Drive com suas cifras.</p>
+        <p className="text-gray-500 text-sm">Cole o ID ou o <b>link da pasta</b> do Drive que contém seus arquivos .txt.</p>
         
         <div className="space-y-3">
           <div className="flex gap-2">
             <input 
               type="text"
               className="flex-1 px-4 py-2 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              placeholder="ID da Pasta do Drive"
+              placeholder="Ex: https://drive.google.com/drive/u/0/folders/..."
               value={driveId}
               onChange={e => setDriveId(e.target.value)}
             />
@@ -99,8 +110,6 @@ const Configuracoes: React.FC = () => {
             </button>
           </div>
           
-          {!gasUrl && <p className="text-amber-600 text-[10px] font-bold">⚠️ Configure o URL da API acima antes de conectar ao Drive.</p>}
-
           {testStatus.msg && (
             <div className={`p-3 rounded-xl flex items-start gap-2 text-sm ${testStatus.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
               {testStatus.ok ? <Check size={18} /> : <AlertCircle size={18} />}
@@ -136,8 +145,7 @@ const Configuracoes: React.FC = () => {
       </section>
 
       <div className="text-center pt-8 border-t border-gray-100 text-gray-400">
-         <p className="text-xs font-bold uppercase tracking-widest">Cifras MISSA v1.2.0 (Vercel Ready)</p>
-         {config.lastSync && <p className="text-[10px] mt-1">Sincronizado: {new Date(config.lastSync).toLocaleString()}</p>}
+         <p className="text-xs font-bold uppercase tracking-widest">Cifras MISSA v1.2.2</p>
       </div>
     </div>
   );
