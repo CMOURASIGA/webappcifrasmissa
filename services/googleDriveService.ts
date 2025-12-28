@@ -1,4 +1,3 @@
-
 /**
  * Este serviço detecta se está rodando dentro do Google ou no Vercel.
  * Se estiver no Vercel, utiliza fetch() para o Web App do Google.
@@ -39,29 +38,52 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
   // 2. Se estivermos no Vercel (ou local)
   const apiUrl = getApiUrl();
   if (!apiUrl) {
-    return { ok: false, error: 'URL da API não configurada.' };
+    throw new Error('URL da API não configurada nas Configurações.');
   }
 
+  // Aumentado para 300 segundos (5 minutos) para suportar 241+ músicas.
+  const TIMEOUT_MS = 300000; 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
   try {
-    // IMPORTANTE: Para evitar erro de CORS 'Failed to fetch' com GAS,
-    // NÃO podemos enviar cabeçalhos personalizados (como Accept ou Content-Type).
     const urlWithParams = new URL(apiUrl);
     urlWithParams.searchParams.append('method', methodName);
     urlWithParams.searchParams.append('args', JSON.stringify(args));
 
+    console.log(`[GAS] Executando ${methodName} em ${apiUrl}...`);
+
     const response = await fetch(urlWithParams.toString(), {
       method: 'GET',
-      mode: 'cors'
+      mode: 'cors',
+      signal: controller.signal,
+      cache: 'no-store'
     });
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
-      throw new Error(`Erro: ${response.status}`);
+      if (response.status === 404) throw new Error('Web App não encontrado (404). Verifique se a URL da API está correta.');
+      throw new Error(`Erro do Google (Status: ${response.status})`);
     }
 
-    return await response.json();
-  } catch (e) {
-    console.error(`Falha ao comunicar com Google Script (${methodName}):`, e);
-    throw new Error('Falha na conexão. Verifique o URL e a publicação do Script.');
+    const data = await response.json();
+    
+    if (data && data.ok === false) {
+      throw new Error(data.error || 'O Google retornou um erro interno.');
+    }
+
+    console.log(`[GAS] ${methodName} concluído com sucesso.`);
+    return data;
+  } catch (e: any) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      throw new Error('O Google demorou mais de 5 minutos. Com 241 músicas, o processamento pode ser pesado. Tente dividir em pastas menores ou verifique a conexão.');
+    }
+    if (e.message.includes('Failed to fetch')) {
+      throw new Error('Bloqueio de CORS. Certifique-se de que publicou o Script como "App da Web" com acesso para "Qualquer pessoa".');
+    }
+    throw e;
   }
 };
 

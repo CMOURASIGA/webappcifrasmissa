@@ -3,7 +3,12 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Cifra, Lista, CategoriaLiturgica, AppConfig } from '../types/models';
 import { storage } from '../services/storageService';
 import { googleDriveService } from '../services/googleDriveService';
-import { INITIAL_SONGS, INITIAL_CATEGORIES } from '../mocks/mockSongs';
+
+interface SyncResult {
+  success: boolean;
+  count?: number;
+  error?: string;
+}
 
 interface AppContextType {
   cifras: Cifra[];
@@ -11,7 +16,7 @@ interface AppContextType {
   categorias: CategoriaLiturgica[];
   config: AppConfig;
   isSyncing: boolean;
-  syncFromDrive: () => Promise<void>;
+  syncFromDrive: () => Promise<SyncResult>;
   saveToDrive: () => Promise<void>;
   addCifra: (cifra: Omit<Cifra, 'id' | 'criadoEm'>) => void;
   updateCifra: (id: string, cifra: Partial<Cifra>) => void;
@@ -22,14 +27,15 @@ interface AppContextType {
   addCategoria: (nome: string) => void;
   deleteCategoria: (id: string) => void;
   updateConfig: (config: Partial<AppConfig>) => void;
+  clearAllData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [cifras, setCifras] = useState<Cifra[]>(() => storage.get<Cifra[]>('CIFRAS') || INITIAL_SONGS);
+  const [cifras, setCifras] = useState<Cifra[]>(() => storage.get<Cifra[]>('CIFRAS') || []);
   const [listas, setListas] = useState<Lista[]>(() => storage.get<Lista[]>('LISTAS') || []);
-  const [categorias, setCategorias] = useState<CategoriaLiturgica[]>(() => storage.get<CategoriaLiturgica[]>('CATEGORIAS') || INITIAL_CATEGORIES);
+  const [categorias, setCategorias] = useState<CategoriaLiturgica[]>(() => storage.get<CategoriaLiturgica[]>('CATEGORIAS') || []);
   const [config, setConfig] = useState<AppConfig>(() => storage.get<AppConfig>('CONFIG') || { fontSize: 16, theme: 'light' });
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -38,11 +44,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => storage.set('CATEGORIAS', categorias), [categorias]);
   useEffect(() => storage.set('CONFIG', config), [config]);
 
-  // Sincroniza arquivos .txt do Drive para a biblioteca local
-  const syncFromDrive = async () => {
+  const clearAllData = () => {
+    setCifras([]);
+    setListas([]);
+    setCategorias([]);
+    localStorage.removeItem('cifras_missa_cifras');
+    localStorage.removeItem('cifras_missa_listas');
+    localStorage.removeItem('cifras_missa_categorias');
+  };
+
+  const syncFromDrive = async (): Promise<SyncResult> => {
     setIsSyncing(true);
     try {
       const driveFiles = await googleDriveService.getAllTextFiles();
+      
       if (Array.isArray(driveFiles)) {
         setCifras(prev => {
           const updatedCifras = [...prev];
@@ -53,7 +68,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               driveId: file.id,
               titulo: file.nome,
               conteudo: file.conteudo,
-              tomBase: updatedCifras[index]?.tomBase || 'C', // Preserva tom local se já existir
+              tomBase: updatedCifras[index]?.tomBase || 'C',
               categorias: updatedCifras[index]?.categorias || [],
               tags: updatedCifras[index]?.tags || [],
               criadoEm: updatedCifras[index]?.criadoEm || new Date().toISOString(),
@@ -66,21 +81,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return updatedCifras;
         });
         setConfig(prev => ({ ...prev, lastSync: new Date().toISOString() }));
+        return { success: true, count: driveFiles.length };
       }
-    } catch (e) {
+      return { success: false, error: 'Resposta do servidor não é uma lista de arquivos.' };
+    } catch (e: any) {
       console.error('Erro ao sincronizar do Drive:', e);
-      alert('Erro ao acessar o Google Drive. Verifique a configuração da pasta.');
+      return { success: false, error: e.message || 'Erro de conexão com o Drive.' };
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // Salva listas e configurações de volta para o Drive (eac_listas.json)
   const saveToDrive = async () => {
     setIsSyncing(true);
     try {
       await googleDriveService.saveUserLists(listas);
-      // Salva metadados (tons, categorias) no eac_meta.json
       const meta = { 
         metaPorCifraId: cifras.reduce((acc, c) => ({
           ...acc, 
@@ -153,7 +168,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       syncFromDrive, saveToDrive,
       addCifra, updateCifra, deleteCifra,
       addLista, updateLista, deleteLista,
-      addCategoria, deleteCategoria, updateConfig
+      addCategoria, deleteCategoria, updateConfig, clearAllData
     }}>
       {children}
     </AppContext.Provider>

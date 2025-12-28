@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Trash2, ArrowLeft, RefreshCw, Cloud, X } from 'lucide-react';
+import { Search, Plus, Trash2, ArrowLeft, RefreshCw, Cloud, X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { normalizeText } from '../utils/stringUtils';
 
@@ -8,6 +8,7 @@ const Biblioteca: React.FC = () => {
   const { cifras, deleteCifra, addCifra, categorias, syncFromDrive, isSyncing } = useApp();
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{show: boolean, success?: boolean, msg: string}>({ show: false, msg: '' });
   
   const [newSong, setNewSong] = useState({
     titulo: '',
@@ -16,6 +17,14 @@ const Biblioteca: React.FC = () => {
     selectedCategorias: [] as string[]
   });
 
+  // Limpar status após alguns segundos apenas se for sucesso
+  useEffect(() => {
+    if (syncStatus.show && syncStatus.success) {
+      const timer = setTimeout(() => setSyncStatus(prev => ({ ...prev, show: false })), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [syncStatus.show, syncStatus.success]);
+
   const filteredCifras = useMemo(() => {
     const term = normalizeText(search);
     return cifras.filter(c => 
@@ -23,6 +32,20 @@ const Biblioteca: React.FC = () => {
       c.tags.some(t => normalizeText(t).includes(term))
     );
   }, [cifras, search]);
+
+  const handleSync = async () => {
+    setSyncStatus({ show: true, msg: 'Conectando ao Drive... Se você tiver muitas músicas, isso pode levar até 2-3 minutos.' });
+    try {
+      const result = await syncFromDrive();
+      if (result.success) {
+        setSyncStatus({ show: true, success: true, msg: `Sincronização concluída! ${result.count} músicas carregadas.` });
+      } else {
+        setSyncStatus({ show: true, success: false, msg: result.error || 'Erro desconhecido na sincronização.' });
+      }
+    } catch (err: any) {
+      setSyncStatus({ show: true, success: false, msg: err.message || 'Falha na comunicação com o servidor.' });
+    }
+  };
 
   const handleAddSong = () => {
     if (!newSong.titulo || !newSong.conteudo) return;
@@ -57,13 +80,13 @@ const Biblioteca: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <button 
-            onClick={syncFromDrive}
+            onClick={handleSync}
             disabled={isSyncing}
-            className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold transition-all disabled:opacity-50"
+            className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold transition-all disabled:opacity-50 relative"
             title="Sincronizar com Drive"
           >
             <RefreshCw size={20} className={isSyncing ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">Sincronizar</span>
+            <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
           </button>
           <button 
             onClick={() => setIsModalOpen(true)}
@@ -73,6 +96,32 @@ const Biblioteca: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Barra de Status de Sincronização */}
+      {syncStatus.show && (
+        <div className={`flex items-start gap-3 p-4 rounded-2xl border animate-in slide-in-from-top duration-300 relative ${
+          syncStatus.success === undefined ? 'bg-blue-50 border-blue-100 text-blue-700' :
+          syncStatus.success ? 'bg-green-50 border-green-100 text-green-700' : 
+          'bg-red-50 border-red-100 text-red-700'
+        }`}>
+          <div className="mt-0.5">
+            {syncStatus.success === undefined ? <RefreshCw className="animate-spin" size={20} /> :
+             syncStatus.success ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          </div>
+          <div className="flex-1 pr-8">
+            <span className="font-medium text-sm leading-tight block">{syncStatus.msg}</span>
+            {syncStatus.success === false && (
+              <p className="text-[10px] mt-1 opacity-80 uppercase font-bold">Dica: Se a falha persistir, tente dividir as músicas em subpastas ou use arquivos .txt mais leves.</p>
+            )}
+          </div>
+          <button 
+            onClick={() => setSyncStatus(prev => ({ ...prev, show: false }))}
+            className="absolute right-3 top-3 p-1 hover:bg-black/5 rounded-full"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -84,6 +133,14 @@ const Biblioteca: React.FC = () => {
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+
+      {cifras.length === 0 && !isSyncing && (
+        <div className="py-20 text-center space-y-4 bg-white rounded-3xl border border-dashed border-gray-200">
+           <Cloud className="mx-auto text-gray-300" size={48} />
+           <p className="text-gray-500 font-medium">Sua biblioteca está vazia.</p>
+           <button onClick={handleSync} className="text-blue-600 font-bold hover:underline">Sincronizar agora</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredCifras.map(cifra => (
