@@ -31,10 +31,11 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
   // 2. Se estivermos no Vercel (ou local)
   const apiUrl = getApiUrl();
   if (!apiUrl) {
-    throw new Error('A URL da API (google_api) não está configurada no ambiente.');
+    console.error('ERRO: Variável "google_api" não encontrada no ambiente.');
+    throw new Error('A URL da API não está configurada. Verifique as variáveis de ambiente (google_api).');
   }
 
-  const TIMEOUT_MS = 300000; // 5 minutos
+  const TIMEOUT_MS = 60000; // 1 minuto para testes
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -43,8 +44,10 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     
     let response;
     
+    // Log para depuração (visível no F12)
+    console.debug(`AppDrive: Chamando ${methodName} em ${apiUrl}`);
+
     if (isSaveMethod) {
-      // Usar POST para salvar dados evita o erro de URL muito longa (que causava o erro de mimeType nulo)
       response = await fetch(apiUrl, {
         method: 'POST',
         mode: 'cors',
@@ -55,7 +58,6 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
         })
       });
     } else {
-      // Usar GET para leitura simples
       const urlWithParams = new URL(apiUrl);
       urlWithParams.searchParams.append('method', methodName);
       urlWithParams.searchParams.append('args', JSON.stringify(args));
@@ -71,7 +73,7 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Erro do Google (Status: ${response.status})`);
+      throw new Error(`Erro HTTP ${response.status}: O Google Script retornou um erro.`);
     }
 
     const data = await response.json();
@@ -83,14 +85,22 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     return data;
   } catch (e: any) {
     clearTimeout(timeoutId);
-    if (e.name === 'AbortError') {
-      throw new Error('O tempo limite foi atingido. O Google Script pode estar demorando para processar muitos arquivos.');
+    
+    if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
+      console.error('CORS ou Erro de Rede detectado ao acessar:', apiUrl);
+      throw new Error('Falha de Rede (Failed to fetch). Certifique-se que o Google Script está publicado como "Qualquer pessoa" (Anyone) e que a URL está correta.');
     }
+
+    if (e.name === 'AbortError') {
+      throw new Error('Tempo limite atingido. A conexão com o Google está muito lenta.');
+    }
+    
     throw e;
   }
 };
 
 export const googleDriveService = {
+  isApiConfigured: () => !!getApiUrl(),
   getConfiguredFolderId: () => run('getConfiguredFolderId'),
   setConfiguredFolderId: (id: string) => run('setConfiguredFolderId', extractFolderId(id)),
   testFolderAccess: (id: string) => run('testFolderAccess', extractFolderId(id)),

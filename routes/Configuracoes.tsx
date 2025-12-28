@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Trash2, Tag, Cloud, Check, AlertCircle, RefreshCw, Server, HelpCircle, Activity, ShieldCheck, Cpu, Info } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Tag, Cloud, Check, AlertCircle, RefreshCw, Server, HelpCircle, Activity, ShieldCheck, Cpu, Info, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { googleDriveService } from '../services/googleDriveService';
@@ -10,6 +10,8 @@ const Configuracoes: React.FC = () => {
   const [newCat, setNewCat] = useState('');
   const [driveIdInput, setDriveIdInput] = useState(config.driveFolderId || '');
   const [testStatus, setTestStatus] = useState<{ok?: boolean, msg?: string, loading?: boolean, time?: number, count?: number}>({});
+  
+  const isApiConfigured = googleDriveService.isApiConfigured();
 
   const handleAdd = () => {
     if (!newCat.trim()) return;
@@ -27,6 +29,11 @@ const Configuracoes: React.FC = () => {
   const testDriveAccess = async () => {
     const idToTest = driveIdInput.trim() || effectiveFolderId;
     
+    if (!isApiConfigured) {
+      setTestStatus({ ok: false, msg: 'ERRO CRÍTICO: A URL da API (google_api) não foi definida nas variáveis de ambiente do servidor.' });
+      return;
+    }
+
     if (!idToTest) {
       alert('Nenhum ID configurado no sistema ou no servidor.');
       return;
@@ -36,7 +43,7 @@ const Configuracoes: React.FC = () => {
     const startTime = Date.now();
     
     try {
-      // Salva o que o usuário digitou (mesmo que seja vazio para voltar ao fallback)
+      // Salva preventivamente
       updateConfig({ driveFolderId: driveIdInput.trim() });
       
       const result = await googleDriveService.testFolderAccess(idToTest);
@@ -52,10 +59,10 @@ const Configuracoes: React.FC = () => {
         });
         await googleDriveService.setConfiguredFolderId(idToTest);
       } else {
-        setTestStatus({ ok: false, msg: result?.error || 'A pasta não pôde ser acessada.' });
+        setTestStatus({ ok: false, msg: result?.error || 'A pasta não pôde ser acessada. Verifique se o ID está correto e se o script tem permissão.' });
       }
     } catch (e: any) {
-      setTestStatus({ ok: false, msg: e.message || 'Erro de conexão.' });
+      setTestStatus({ ok: false, msg: e.message || 'Erro de conexão desconhecido.' });
     }
   };
 
@@ -67,6 +74,20 @@ const Configuracoes: React.FC = () => {
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
       </div>
+
+      {/* ALERTA DE API CONFIGURADA */}
+      {!isApiConfigured && (
+        <div className="bg-red-50 border-2 border-red-200 p-6 rounded-3xl flex flex-col md:flex-row items-center gap-4 animate-pulse">
+           <AlertCircle className="text-red-500 shrink-0" size={32} />
+           <div className="space-y-1">
+              <h3 className="font-black text-red-900 uppercase text-sm tracking-tight">Backend Desconectado</h3>
+              <p className="text-xs text-red-700 leading-relaxed">
+                A variável <strong>google_api</strong> não foi encontrada. O sistema não consegue falar com o Google. 
+                Configure a URL do seu Script no painel da Vercel ou no seu arquivo .env.
+              </p>
+           </div>
+        </div>
+      )}
 
       <section className="space-y-4">
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
@@ -117,8 +138,8 @@ const Configuracoes: React.FC = () => {
               />
               <button 
                 onClick={testDriveAccess}
-                disabled={testStatus.loading}
-                className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-blue-200"
+                disabled={testStatus.loading || !isApiConfigured}
+                className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-30 flex items-center gap-2 shadow-lg shadow-blue-200"
               >
                 {testStatus.loading ? <RefreshCw className="animate-spin" size={18} /> : <Activity size={18} />}
                 Testar & Salvar
@@ -137,7 +158,19 @@ const Configuracoes: React.FC = () => {
                 {testStatus.ok ? <ShieldCheck size={20} /> : <AlertCircle size={20} />}
                 <span>{testStatus.ok ? 'Diagnóstico OK' : 'Falha na Conexão'}</span>
               </div>
-              <p className="text-sm">{testStatus.msg}</p>
+              <p className="text-xs leading-relaxed">{testStatus.msg}</p>
+              
+              {!testStatus.ok && isApiConfigured && (
+                <div className="mt-2 p-3 bg-white/50 rounded-lg text-[10px] space-y-1 border border-red-100">
+                   <p className="font-bold uppercase opacity-60">Dicas para resolver:</p>
+                   <ul className="list-disc pl-4 space-y-1">
+                     <li>Verifique se o ID da pasta está correto (ex: 13IP0Vf...).</li>
+                     <li>Abra o Google Script, clique em <strong>Implantar (Deploy)</strong> e garanta que está como <strong>Qualquer pessoa (Anyone)</strong>.</li>
+                     <li>Verifique se a pasta no Drive tem permissões de leitura.</li>
+                   </ul>
+                </div>
+              )}
+
               {testStatus.ok && (
                 <div className="grid grid-cols-2 gap-4 mt-2 pt-2 border-t border-green-200/50">
                   <div>
