@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ArrowLeft, Plus, Trash2, Tag, Cloud, Check, AlertCircle, RefreshCw, Server, HelpCircle, Copy } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -77,7 +76,7 @@ const Configuracoes: React.FC = () => {
             <HelpCircle size={16} /> Instruções Importantes:
           </h3>
           <ul className="text-blue-700 text-xs space-y-1 list-disc pl-4">
-            <li>No Script, clique em <b>Implantar > Nova implantação</b>.</li>
+            <li>No Script, clique em <b>Implantar &gt; Nova implantação</b>.</li>
             <li>Tipo: <b>App da Web</b>.</li>
             <li>Quem pode acessar: <b>Qualquer pessoa</b> (isso é vital para o Vercel funcionar).</li>
             <li>O código deve conter a função <code>doGet(e)</code> que processe o parâmetro <code>method</code>.</li>
