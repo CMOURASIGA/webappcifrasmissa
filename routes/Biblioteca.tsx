@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Plus, Trash2, ArrowLeft, RefreshCw, CloudSync } from 'lucide-react';
@@ -86,7 +85,12 @@ const Biblioteca: React.FC = () => {
                   {cifra.tomBase}
                 </span>
                 <div className="flex items-center gap-2">
-                   {cifra.driveId && <CloudSync size={14} className="text-green-500" title="Sincronizado com Drive" />}
+                   {/* Fix: Moved 'title' prop from CloudSync icon to a wrapper span to resolve TypeScript error on line 89 */}
+                   {cifra.driveId && (
+                     <span title="Sincronizado com Drive">
+                       <CloudSync size={14} className="text-green-500" />
+                     </span>
+                   )}
                    <button 
                     onClick={(e) => {
                       e.preventDefault();
