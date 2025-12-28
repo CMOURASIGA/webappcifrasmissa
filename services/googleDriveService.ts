@@ -1,12 +1,11 @@
 
 /**
- * Este serviço detecta se está rodando dentro do Google ou no Vercel.
- * Se estiver no Vercel, utiliza fetch() para o Web App do Google.
+ * Este serviço gerencia a comunicação com o Google Apps Script.
+ * Ajustado para evitar erros de CORS (Preflight OPTIONS).
  */
 
 declare const google: any;
 
-// Função auxiliar para extrair o ID da pasta caso o usuário cole o link completo
 const extractFolderId = (input: string): string => {
   if (input.includes('folders/')) {
     return input.split('folders/')[1].split('?')[0].split('/')[0];
@@ -19,7 +18,7 @@ const getApiUrl = () => {
 };
 
 const run = async (methodName: string, ...args: any[]): Promise<any> => {
-  // 1. Verificar se estamos dentro do ambiente Google Apps Script
+  // 1. Ambiente Google Apps Script (se embutido)
   if (typeof google !== 'undefined' && google.script && google.script.run) {
     return new Promise((resolve, reject) => {
       google.script.run
@@ -28,30 +27,26 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     });
   }
 
-  // 2. Se estivermos no Vercel (ou local)
+  // 2. Ambiente Externo (Vercel/Local)
   const apiUrl = getApiUrl();
-  if (!apiUrl) {
-    console.error('ERRO: Variável "google_api" não encontrada no ambiente.');
-    throw new Error('A URL da API não está configurada. Verifique as variáveis de ambiente (google_api).');
-  }
+  if (!apiUrl) throw new Error('Variável google_api não configurada.');
 
-  const TIMEOUT_MS = 60000; // 1 minuto para testes
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   try {
     const isSaveMethod = methodName.startsWith('save') || methodName.startsWith('set');
-    
+    console.debug(`[AppDrive] Chamando: ${methodName}`);
+
     let response;
     
-    // Log para depuração (visível no F12)
-    console.debug(`AppDrive: Chamando ${methodName} em ${apiUrl}`);
-
     if (isSaveMethod) {
+      // IMPORTANTE: Enviamos como text/plain para evitar o Preflight OPTIONS do CORS
+      // O Google Script receberá o JSON no corpo da requisição (e.postData.contents)
       response = await fetch(apiUrl, {
         method: 'POST',
         mode: 'cors',
-        signal: controller.signal,
+        redirect: 'follow', // Obrigatório para o redirecionamento do Google
         body: JSON.stringify({
           method: methodName,
           args: args
@@ -65,7 +60,7 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
       response = await fetch(urlWithParams.toString(), {
         method: 'GET',
         mode: 'cors',
-        signal: controller.signal,
+        redirect: 'follow',
         cache: 'no-store'
       });
     }
@@ -73,28 +68,18 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Erro HTTP ${response.status}: O Google Script retornou um erro.`);
+      throw new Error(`Erro HTTP ${response.status}. Verifique se o script está publicado como "Anyone".`);
     }
 
     const data = await response.json();
-    
-    if (data && data.ok === false) {
-      throw new Error(data.error || 'O Google retornou um erro interno.');
-    }
-
+    if (data && data.ok === false) throw new Error(data.error || 'Erro no Google Script.');
     return data;
+
   } catch (e: any) {
     clearTimeout(timeoutId);
-    
-    if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
-      console.error('CORS ou Erro de Rede detectado ao acessar:', apiUrl);
-      throw new Error('Falha de Rede (Failed to fetch). Certifique-se que o Google Script está publicado como "Qualquer pessoa" (Anyone) e que a URL está correta.');
+    if (e.name === 'TypeError' && e.message.includes('fetch')) {
+      throw new Error('Erro de CORS/Rede. O Google Script não retornou permissão ou não está publicado corretamente.');
     }
-
-    if (e.name === 'AbortError') {
-      throw new Error('Tempo limite atingido. A conexão com o Google está muito lenta.');
-    }
-    
     throw e;
   }
 };
