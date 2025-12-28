@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Trash2, ArrowLeft, RefreshCw, Cloud, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, Plus, Trash2, ArrowLeft, RefreshCw, Cloud, X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { normalizeText } from '../utils/stringUtils';
 
@@ -8,7 +8,12 @@ const Biblioteca: React.FC = () => {
   const { cifras, deleteCifra, addCifra, categorias, syncFromDrive, isSyncing } = useApp();
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<{show: boolean, success?: boolean, msg: string}>({ show: false, msg: '' });
+  const [syncStatus, setSyncStatus] = useState<{
+    show: boolean, 
+    success?: boolean, 
+    msg: string,
+    stats?: { new: number, updated: number, kept: number }
+  }>({ show: false, msg: '' });
   
   const [newSong, setNewSong] = useState({
     titulo: '',
@@ -17,10 +22,9 @@ const Biblioteca: React.FC = () => {
     selectedCategorias: [] as string[]
   });
 
-  // Limpar status após alguns segundos apenas se for sucesso
   useEffect(() => {
     if (syncStatus.show && syncStatus.success) {
-      const timer = setTimeout(() => setSyncStatus(prev => ({ ...prev, show: false })), 5000);
+      const timer = setTimeout(() => setSyncStatus(prev => ({ ...prev, show: false })), 8000);
       return () => clearTimeout(timer);
     }
   }, [syncStatus.show, syncStatus.success]);
@@ -34,11 +38,20 @@ const Biblioteca: React.FC = () => {
   }, [cifras, search]);
 
   const handleSync = async () => {
-    setSyncStatus({ show: true, msg: 'Conectando ao Drive... Se você tiver muitas músicas, isso pode levar até 2-3 minutos.' });
+    setSyncStatus({ show: true, msg: 'Analisando biblioteca no Drive...' });
     try {
       const result = await syncFromDrive();
       if (result.success) {
-        setSyncStatus({ show: true, success: true, msg: `Sincronização concluída! ${result.count} músicas carregadas.` });
+        setSyncStatus({ 
+          show: true, 
+          success: true, 
+          msg: `Sincronização inteligente concluída!`,
+          stats: {
+            new: result.newCount || 0,
+            updated: result.updatedCount || 0,
+            kept: result.keptCount || 0
+          }
+        });
       } else {
         setSyncStatus({ show: true, success: false, msg: result.error || 'Erro desconhecido na sincronização.' });
       }
@@ -86,7 +99,7 @@ const Biblioteca: React.FC = () => {
             title="Sincronizar com Drive"
           >
             <RefreshCw size={20} className={isSyncing ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
+            <span className="hidden sm:inline">{isSyncing ? 'Analisando...' : 'Sincronizar'}</span>
           </button>
           <button 
             onClick={() => setIsModalOpen(true)}
@@ -97,29 +110,43 @@ const Biblioteca: React.FC = () => {
         </div>
       </div>
 
-      {/* Barra de Status de Sincronização */}
       {syncStatus.show && (
-        <div className={`flex items-start gap-3 p-4 rounded-2xl border animate-in slide-in-from-top duration-300 relative ${
+        <div className={`flex flex-col gap-3 p-4 rounded-2xl border animate-in slide-in-from-top duration-300 relative ${
           syncStatus.success === undefined ? 'bg-blue-50 border-blue-100 text-blue-700' :
           syncStatus.success ? 'bg-green-50 border-green-100 text-green-700' : 
           'bg-red-50 border-red-100 text-red-700'
         }`}>
-          <div className="mt-0.5">
-            {syncStatus.success === undefined ? <RefreshCw className="animate-spin" size={20} /> :
-             syncStatus.success ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5">
+              {syncStatus.success === undefined ? <RefreshCw className="animate-spin" size={20} /> :
+               syncStatus.success ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+            </div>
+            <div className="flex-1 pr-8">
+              <span className="font-bold text-sm block">{syncStatus.msg}</span>
+              {syncStatus.stats && (
+                <div className="flex flex-wrap gap-4 mt-2">
+                   <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                      <span className="text-xs font-medium">Novas: <strong>{syncStatus.stats.new}</strong></span>
+                   </div>
+                   <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                      <span className="text-xs font-medium">Atualizadas: <strong>{syncStatus.stats.updated}</strong></span>
+                   </div>
+                   <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                      <span className="text-xs font-medium">Sem alterações: <strong>{syncStatus.stats.kept}</strong></span>
+                   </div>
+                </div>
+              )}
+            </div>
+            <button 
+              onClick={() => setSyncStatus(prev => ({ ...prev, show: false }))}
+              className="absolute right-3 top-3 p-1 hover:bg-black/5 rounded-full"
+            >
+              <X size={16} />
+            </button>
           </div>
-          <div className="flex-1 pr-8">
-            <span className="font-medium text-sm leading-tight block">{syncStatus.msg}</span>
-            {syncStatus.success === false && (
-              <p className="text-[10px] mt-1 opacity-80 uppercase font-bold">Dica: Se a falha persistir, tente dividir as músicas em subpastas ou use arquivos .txt mais leves.</p>
-            )}
-          </div>
-          <button 
-            onClick={() => setSyncStatus(prev => ({ ...prev, show: false }))}
-            className="absolute right-3 top-3 p-1 hover:bg-black/5 rounded-full"
-          >
-            <X size={16} />
-          </button>
         </div>
       )}
 

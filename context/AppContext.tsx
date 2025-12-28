@@ -6,6 +6,9 @@ import { googleDriveService } from '../services/googleDriveService';
 interface SyncResult {
   success: boolean;
   count?: number;
+  newCount?: number;
+  updatedCount?: number;
+  keptCount?: number;
   error?: string;
 }
 
@@ -44,12 +47,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => storage.set('CATEGORIAS', categorias), [categorias]);
   useEffect(() => storage.set('CONFIG', config), [config]);
 
-  // Função para agendar salvamento automático no Drive
   const scheduleDriveSave = () => {
     if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
     syncTimeoutRef.current = window.setTimeout(() => {
       saveToDrive();
-    }, 3000); // Salva 3 segundos após a última alteração
+    }, 3000);
   };
 
   const clearAllData = () => {
@@ -63,32 +65,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const syncFromDrive = async (): Promise<SyncResult> => {
     setIsSyncing(true);
+    let newCount = 0;
+    let updatedCount = 0;
+    let keptCount = 0;
+
     try {
-      // 1. Puxar músicas
       const driveFiles = await googleDriveService.getAllTextFiles();
-      
-      // 2. Puxar Listas persistidas
       const driveListas = await googleDriveService.getUserLists();
       
       if (Array.isArray(driveFiles)) {
         setCifras(prev => {
           const updatedCifras = [...prev];
+          
           driveFiles.forEach((file: any) => {
             const index = updatedCifras.findIndex(c => c.driveId === file.id || c.titulo === file.nome);
-            const cifraData: Cifra = {
-              id: index >= 0 ? updatedCifras[index].id : Math.random().toString(36).substring(2, 11),
-              driveId: file.id,
-              titulo: file.nome,
-              conteudo: file.conteudo,
-              tomBase: updatedCifras[index]?.tomBase || 'C',
-              categorias: updatedCifras[index]?.categorias || [],
-              tags: updatedCifras[index]?.tags || [],
-              criadoEm: updatedCifras[index]?.criadoEm || new Date().toISOString(),
-              ultimaAtualizacao: file.ultimaAtualizacao
-            };
+            
+            // Lógica Incremental: 
+            // Só atualizamos se o arquivo for novo OU se a data de modificação for diferente
+            const needsUpdate = index === -1 || updatedCifras[index].ultimaAtualizacao !== file.ultimaAtualizacao;
 
-            if (index >= 0) updatedCifras[index] = cifraData;
-            else updatedCifras.push(cifraData);
+            if (needsUpdate) {
+              const cifraData: Cifra = {
+                id: index >= 0 ? updatedCifras[index].id : Math.random().toString(36).substring(2, 11),
+                driveId: file.id,
+                titulo: file.nome,
+                conteudo: file.conteudo,
+                tomBase: index >= 0 ? updatedCifras[index].tomBase : 'C',
+                categorias: index >= 0 ? updatedCifras[index].categorias : [],
+                tags: index >= 0 ? updatedCifras[index].tags : [],
+                criadoEm: index >= 0 ? updatedCifras[index].criadoEm : new Date().toISOString(),
+                ultimaAtualizacao: file.ultimaAtualizacao
+              };
+
+              if (index >= 0) {
+                updatedCifras[index] = cifraData;
+                updatedCount++;
+              } else {
+                updatedCifras.push(cifraData);
+                newCount++;
+              }
+            } else {
+              keptCount++;
+            }
           });
           return updatedCifras;
         });
@@ -98,8 +116,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setListas(driveListas);
       }
 
+      const totalCount = driveFiles?.length || 0;
       setConfig(prev => ({ ...prev, lastSync: new Date().toISOString() }));
-      return { success: true, count: driveFiles?.length || 0 };
+      
+      return { 
+        success: true, 
+        count: totalCount,
+        newCount,
+        updatedCount,
+        keptCount
+      };
     } catch (e: any) {
       console.error('Erro ao sincronizar do Drive:', e);
       return { success: false, error: e.message || 'Erro de conexão com o Drive.' };
@@ -112,10 +138,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!config.gasApiUrl) return false;
     setIsSyncing(true);
     try {
-      console.log('Salvando listas e meta no Drive...');
       await googleDriveService.saveUserLists(listas);
-      
-      // Salvar metadados das cifras (tons alterados, etc)
       const meta = { 
         metaPorCifraId: cifras.reduce((acc, c) => ({
           ...acc, 
@@ -123,7 +146,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }), {})
       };
       await googleDriveService.saveUserMeta(meta);
-      console.log('Backup no Drive concluído.');
       return true;
     } catch (e) {
       console.error('Erro ao salvar no Drive:', e);
