@@ -20,6 +20,7 @@ interface AppContextType {
   config: AppConfig;
   isSyncing: boolean;
   syncStatus: string;
+  isEnvFolderId: boolean; // Indica se o ID vem do Vercel/Env
   syncFromDrive: () => Promise<SyncResult>;
   saveToDrive: () => Promise<boolean>;
   addCifra: (cifra: Omit<Cifra, 'id' | 'criadoEm'>) => void;
@@ -36,14 +37,33 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Pega o ID da variável de ambiente injetada pelo Vite/Vercel
+const ENV_DRIVE_ID = (process.env as any).DRIVE_FOLDER_ID || '';
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [cifras, setCifras] = useState<Cifra[]>(() => storage.get<Cifra[]>('CIFRAS') || []);
   const [listas, setListas] = useState<Lista[]>(() => storage.get<Lista[]>('LISTAS') || []);
   const [categorias, setCategorias] = useState<CategoriaLiturgica[]>(() => storage.get<CategoriaLiturgica[]>('CATEGORIAS') || []);
-  const [config, setConfig] = useState<AppConfig>(() => storage.get<AppConfig>('CONFIG') || { fontSize: 16, chordFontSize: 14, theme: 'light' });
+  
+  const [config, setConfig] = useState<AppConfig>(() => {
+    const stored = storage.get<AppConfig>('CONFIG') || { fontSize: 16, chordFontSize: 14, theme: 'light' };
+    
+    // Lógica de prioridade:
+    // 1. Se houver ID no LocalStorage, mantém (preferência do usuário local).
+    // 2. Se não houver ID local mas houver no ENV (Vercel), usa o do ENV.
+    if (!stored.driveFolderId && ENV_DRIVE_ID) {
+      stored.driveFolderId = ENV_DRIVE_ID;
+    }
+    
+    return stored;
+  });
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
   const syncTimeoutRef = useRef<number | null>(null);
+
+  // Verifica se o ID sendo usado é exatamente o que está no ENV
+  const isEnvFolderId = !!ENV_DRIVE_ID && config.driveFolderId === ENV_DRIVE_ID;
 
   useEffect(() => storage.set('CIFRAS', cifras), [cifras]);
   useEffect(() => storage.set('LISTAS', listas), [listas]);
@@ -199,7 +219,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      cifras, listas, categorias, config, isSyncing, syncStatus,
+      cifras, listas, categorias, config, isSyncing, syncStatus, isEnvFolderId,
       syncFromDrive, saveToDrive,
       addCifra, updateCifra, deleteCifra,
       addLista, updateLista, deleteLista,

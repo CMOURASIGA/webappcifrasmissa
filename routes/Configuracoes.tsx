@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Trash2, Tag, Cloud, Check, AlertCircle, RefreshCw, Server, HelpCircle, Activity, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Tag, Cloud, Check, AlertCircle, RefreshCw, Server, HelpCircle, Activity, ShieldCheck, Cpu } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { googleDriveService } from '../services/googleDriveService';
 
 const Configuracoes: React.FC = () => {
-  const { categorias, addCategoria, deleteCategoria, config, updateConfig, clearAllData } = useApp();
+  const { categorias, addCategoria, deleteCategoria, config, updateConfig, clearAllData, isEnvFolderId } = useApp();
   const [newCat, setNewCat] = useState('');
   const [driveId, setDriveId] = useState(config.driveFolderId || '');
   const [testStatus, setTestStatus] = useState<{ok?: boolean, msg?: string, loading?: boolean, time?: number, count?: number}>({});
@@ -67,9 +67,16 @@ const Configuracoes: React.FC = () => {
       </div>
 
       <section className="space-y-4">
-        <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-2">
-          <Cloud size={20} className="text-blue-600" />
-          <h2>Pasta de Cifras (Google Drive)</h2>
+        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+          <div className="flex items-center gap-2 text-gray-900 font-bold text-lg">
+            <Cloud size={20} className="text-blue-600" />
+            <h2>Pasta de Cifras (Google Drive)</h2>
+          </div>
+          {isEnvFolderId && (
+            <span className="flex items-center gap-1 bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-tighter">
+              <Cpu size={10} /> Definido via Vercel
+            </span>
+          )}
         </div>
         <div className="space-y-4">
           <div className="flex flex-col gap-2">
@@ -77,7 +84,9 @@ const Configuracoes: React.FC = () => {
             <div className="flex gap-2">
               <input 
                 type="text"
-                className="flex-1 px-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                className={`flex-1 px-4 py-2 bg-white border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm ${
+                  isEnvFolderId ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'
+                }`}
                 placeholder="ID da pasta no Drive"
                 value={driveId}
                 onChange={e => setDriveId(e.target.value)}
@@ -91,6 +100,11 @@ const Configuracoes: React.FC = () => {
                 Testar Carga
               </button>
             </div>
+            {isEnvFolderId && (
+              <p className="text-[10px] text-blue-500 font-bold">
+                Dica: O ID acima foi pré-configurado pelo administrador no servidor. Você ainda pode alterá-lo localmente se desejar.
+              </p>
+            )}
             <p className="text-[10px] text-gray-400 font-medium">A URL da API do Google Script está sendo gerenciada automaticamente pelo sistema.</p>
           </div>
           

@@ -11,7 +11,8 @@ export default defineConfig({
     outDir: 'dist'
   },
   define: {
-    // Isso mapeia a variável google_api do Vercel para o código front-end
-    'process.env.google_api': JSON.stringify(process.env.google_api || '')
+    // Isso mapeia as variáveis do Vercel para o código front-end
+    'process.env.google_api': JSON.stringify(process.env.google_api || ''),
+    'process.env.DRIVE_FOLDER_ID': JSON.stringify(process.env.DRIVE_FOLDER_ID || '')
   }
 });
