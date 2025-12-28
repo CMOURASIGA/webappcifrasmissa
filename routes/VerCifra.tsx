@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit3, Type, ZoomIn, ZoomOut, X } from 'lucide-react';
+import { ArrowLeft, Edit3, ZoomIn, ZoomOut, Maximize2, Minimize2, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import CifraViewer from '../components/CifraViewer';
 import TransposeControls from '../components/TransposeControls';
@@ -14,12 +14,13 @@ const VerCifra: React.FC = () => {
   
   const [transpose, setTranspose] = useState(0);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
   
   const fontSize = config.chordFontSize || 14;
 
-  const handleZoom = (delta: number) => {
-    const newSize = Math.min(32, Math.max(10, fontSize + delta));
-    updateConfig({ chordFontSize: newSize });
+  const handleZoom = (val: number) => {
+    updateConfig({ chordFontSize: val });
   };
 
   const [editFormData, setEditFormData] = useState({
@@ -62,58 +63,106 @@ const VerCifra: React.FC = () => {
     setIsEditModalOpen(false);
   };
 
-  const toggleCategory = (id: string) => {
+  const toggleCategory = (catId: string) => {
     setEditFormData(prev => ({
       ...prev,
-      selectedCategorias: prev.selectedCategorias.includes(id)
-        ? prev.selectedCategorias.filter(x => x !== id)
-        : [...prev.selectedCategorias, id]
+      selectedCategorias: prev.selectedCategorias.includes(catId)
+        ? prev.selectedCategorias.filter(x => x !== catId)
+        : [...prev.selectedCategorias, catId]
     }));
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="sticky top-16 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm px-2 md:px-4 py-2">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => navigate(-1)} 
-              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div className="min-w-0">
-              <h1 className="text-sm md:text-lg font-bold text-gray-900 leading-tight truncate">{cifra.titulo}</h1>
-              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Tom: {cifra.tomBase}</p>
+    <div className={`min-h-screen bg-white transition-all ${isFullscreen ? 'fixed inset-0 z-[100] overflow-y-auto' : 'pb-20'}`}>
+      {/* CABEÇALHO COMPACTO */}
+      {!isFullscreen && (
+        <div className="sticky top-16 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1.5 shadow-sm">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 min-w-0">
+              <button 
+                onClick={() => navigate(-1)} 
+                className="p-2 hover:bg-gray-100 rounded-full text-gray-500"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <div className="min-w-0">
+                <h1 className="text-sm font-bold text-gray-900 leading-tight truncate">{cifra.titulo}</h1>
+                <p className="text-[10px] text-blue-600 font-black uppercase">Tom: {cifra.tomBase}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={() => setIsFullscreen(true)}
+                className="p-2 text-gray-400 hover:text-blue-600 rounded-lg"
+                title="Modo Leitura Cheia"
+              >
+                <Maximize2 size={20} />
+              </button>
+              <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className="p-2 text-gray-400 hover:text-blue-600 rounded-lg"
+              >
+                <Edit3 size={20} />
+              </button>
             </div>
           </div>
+        </div>
+      )}
 
-          <div className="flex items-center justify-between md:justify-end gap-2 px-2 md:px-0">
-             <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-                <button onClick={() => handleZoom(-2)} className="p-1.5 hover:bg-white rounded text-gray-500" title="Diminuir fonte"><ZoomOut size={16}/></button>
-                <div className="px-1.5 text-[10px] font-black text-gray-400 select-none">{fontSize}px</div>
-                <button onClick={() => handleZoom(2)} className="p-1.5 hover:bg-white rounded text-gray-500" title="Aumentar fonte"><ZoomIn size={16}/></button>
+      {/* CONTROLES FLUTUANTES (Aparecem no scroll ou tela cheia) */}
+      <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
+        <div className="bg-slate-900/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 flex flex-col gap-3 min-w-[280px]">
+          
+          <div className="flex items-center justify-between gap-4">
+             <div className="flex items-center gap-2 flex-1">
+                <ZoomOut size={14} className="text-slate-400" />
+                <input 
+                  type="range" 
+                  min="8" 
+                  max="32" 
+                  step="1"
+                  value={fontSize}
+                  onChange={(e) => handleZoom(parseInt(e.target.value))}
+                  className="flex-1 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+                <ZoomIn size={14} className="text-slate-400" />
+                <span className="text-[10px] font-mono font-bold w-6 text-center">{fontSize}</span>
              </div>
              
-             <div className="scale-90 md:scale-100 origin-right flex items-center gap-2">
-               <TransposeControls 
-                 amount={transpose} 
-                 onChange={setTranspose} 
-                 onReset={() => setTranspose(0)} 
-               />
-               <button 
-                 onClick={() => setIsEditModalOpen(true)}
-                 className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
-                 title="Editar Cifra"
-               >
-                 <Edit3 size={18} />
+             {isFullscreen && (
+               <button onClick={() => setIsFullscreen(false)} className="p-1.5 bg-red-500/20 text-red-400 rounded-lg">
+                 <Minimize2 size={18} />
                </button>
-             </div>
+             )}
+          </div>
+
+          <div className="flex items-center justify-between border-t border-slate-800 pt-2">
+            <TransposeControls 
+               amount={transpose} 
+               onChange={setTranspose} 
+               onReset={() => setTranspose(0)} 
+            />
+            <button 
+              onClick={() => setShowControls(false)}
+              className="p-1.5 text-slate-500 hover:text-white"
+            >
+              <ChevronDown size={20} />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto p-2 md:p-4">
+      {!showControls && (
+        <button 
+          onClick={() => setShowControls(true)}
+          className="fixed bottom-6 right-6 z-50 p-3 bg-blue-600 text-white rounded-full shadow-lg animate-bounce"
+        >
+          <ChevronUp size={24} />
+        </button>
+      )}
+
+      <div className={`max-w-5xl mx-auto p-1 md:p-4 ${isFullscreen ? 'pt-4' : ''}`}>
         <CifraViewer 
           conteudo={cifra.conteudo} 
           transposeAmount={transpose} 
@@ -121,9 +170,9 @@ const VerCifra: React.FC = () => {
         />
       </div>
 
-      {/* Modal de Edição permanece... */}
+      {/* Modal de Edição */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">Editar Cifra</h2>

@@ -17,20 +17,24 @@ const CifraViewer: React.FC<CifraViewerProps> = ({ conteudo, transposeAmount, fo
 
   return (
     <div 
-      className="font-mono whitespace-pre overflow-x-auto p-3 md:p-8 bg-white rounded-xl shadow-sm border border-gray-100 leading-[1.3] md:leading-relaxed"
+      className="font-mono whitespace-pre overflow-x-auto p-1.5 md:p-8 bg-white rounded-lg leading-[1.15] md:leading-relaxed"
       style={{ fontSize: `${fontSize}px` }}
     >
       {lines.map((line, idx) => {
         const isChords = isChordLine(line);
         if (isChords) {
           return (
-            <div key={idx} className="text-blue-700 font-bold min-h-[1.2em] select-none">
+            <div key={idx} className="text-blue-700 font-bold min-h-[1.1em] select-none">
               {line}
             </div>
           );
         }
+        // Se a linha for vazia, mantemos um pequeno espaço para separar versos
+        if (!line.trim()) {
+          return <div key={idx} className="h-[0.5em]"></div>;
+        }
         return (
-          <div key={idx} className="text-gray-800 min-h-[1.2em]">
+          <div key={idx} className="text-gray-900 min-h-[1.1em]">
             {line}
           </div>
         );
