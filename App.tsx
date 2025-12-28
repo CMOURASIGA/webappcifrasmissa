@@ -8,6 +8,7 @@ import Biblioteca from './routes/Biblioteca';
 import VerCifra from './routes/VerCifra';
 import Listas from './routes/Listas';
 import NovaLista from './routes/NovaLista';
+import EditarLista from './routes/EditarLista';
 import VerLista from './routes/VerLista';
 import Configuracoes from './routes/Configuracoes';
 import ComoUsar from './routes/ComoUsar';
@@ -25,6 +26,7 @@ const App: React.FC = () => {
               <Route path="/cifra/:id" element={<VerCifra />} />
               <Route path="/listas" element={<Listas />} />
               <Route path="/listas/nova" element={<NovaLista />} />
+              <Route path="/listas/editar/:id" element={<EditarLista />} />
               <Route path="/listas/:id" element={<VerLista />} />
               <Route path="/configuracoes" element={<Configuracoes />} />
               <Route path="/como-usar" element={<ComoUsar />} />

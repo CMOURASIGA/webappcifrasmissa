@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, List as ListIcon, Type, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, List as ListIcon, Type, ZoomIn, ZoomOut, Edit3 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import CifraViewer from '../components/CifraViewer';
 import TransposeControls from '../components/TransposeControls';
@@ -74,6 +74,13 @@ const VerLista: React.FC = () => {
                onChange={handleTransposeChange} 
                onReset={() => handleTransposeChange(0)} 
              />
+             <Link 
+                to={`/listas/editar/${lista.id}`}
+                className="p-2.5 bg-amber-50 text-amber-600 rounded-full hover:bg-amber-100"
+                title="Editar esta lista"
+             >
+               <Edit3 size={20} />
+             </Link>
              <button 
                 onClick={() => setIsSidebarOpen(true)}
                 className="p-2.5 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200"

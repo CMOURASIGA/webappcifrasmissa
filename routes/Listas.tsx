@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, Calendar, Music, ArrowLeft, ChevronRight, Clock, List, Cloud, CloudOff, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Edit3, Calendar, Music, ArrowLeft, ChevronRight, List, Cloud, CloudOff, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDate } from '../utils/stringUtils';
 
@@ -70,7 +70,6 @@ const Listas: React.FC = () => {
               <div className="space-y-1">
                 <Link to={`/listas/${lista.id}`} className="text-xl font-bold text-gray-900 hover:text-amber-600 transition-colors flex items-center gap-2">
                   {lista.nome}
-                  {/* FIX: Wrapping Cloud icon in span to avoid TS error with 'title' prop */}
                   <span title="Sincronizado">
                     <Cloud size={14} className="text-green-500 opacity-60" />
                   </span>
@@ -80,12 +79,22 @@ const Listas: React.FC = () => {
                   <span className="flex items-center gap-1"><Music size={14}/> {lista.cifraIds.length} músicas</span>
                 </div>
               </div>
-              <button 
-                onClick={() => confirm('Excluir esta lista?') && deleteLista(lista.id)}
-                className="p-2 text-gray-300 hover:text-red-500 transition-colors"
-              >
-                <Trash2 size={20} />
-              </button>
+              <div className="flex items-center gap-1">
+                <Link 
+                  to={`/listas/editar/${lista.id}`}
+                  className="p-2 text-gray-300 hover:text-amber-500 transition-colors"
+                  title="Editar lista"
+                >
+                  <Edit3 size={20} />
+                </Link>
+                <button 
+                  onClick={() => confirm('Excluir esta lista?') && deleteLista(lista.id)}
+                  className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                  title="Excluir lista"
+                >
+                  <Trash2 size={20} />
+                </button>
+              </div>
             </div>
             
             {lista.descricao && (
