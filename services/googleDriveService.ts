@@ -1,12 +1,13 @@
 
 /**
  * Este serviço gerencia a comunicação com o Google Apps Script.
- * Ajustado para evitar erros de CORS (Preflight OPTIONS).
+ * Ajustado para aceitar variáveis em maiúsculas ou minúsculas.
  */
 
 declare const google: any;
 
 const extractFolderId = (input: string): string => {
+  if (!input) return '';
   if (input.includes('folders/')) {
     return input.split('folders/')[1].split('?')[0].split('/')[0];
   }
@@ -14,7 +15,9 @@ const extractFolderId = (input: string): string => {
 };
 
 const getApiUrl = () => {
-  return (process.env.google_api || '').trim();
+  // Tenta buscar de ambas as formas para garantir compatibilidade com Vercel
+  const api = (process.env.google_api || (process.env as any).GOOGLE_API || '').trim();
+  return api;
 };
 
 const run = async (methodName: string, ...args: any[]): Promise<any> => {
@@ -29,24 +32,22 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
 
   // 2. Ambiente Externo (Vercel/Local)
   const apiUrl = getApiUrl();
-  if (!apiUrl) throw new Error('Variável google_api não configurada.');
+  if (!apiUrl) throw new Error('Variável google_api não configurada no servidor.');
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   try {
     const isSaveMethod = methodName.startsWith('save') || methodName.startsWith('set');
-    console.debug(`[AppDrive] Chamando: ${methodName}`);
-
+    
     let response;
     
     if (isSaveMethod) {
-      // IMPORTANTE: Enviamos como text/plain para evitar o Preflight OPTIONS do CORS
-      // O Google Script receberá o JSON no corpo da requisição (e.postData.contents)
+      // POST "Simple Request" (sem headers customizados) para evitar preflight OPTIONS
       response = await fetch(apiUrl, {
         method: 'POST',
         mode: 'cors',
-        redirect: 'follow', // Obrigatório para o redirecionamento do Google
+        redirect: 'follow',
         body: JSON.stringify({
           method: methodName,
           args: args
@@ -78,7 +79,7 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
   } catch (e: any) {
     clearTimeout(timeoutId);
     if (e.name === 'TypeError' && e.message.includes('fetch')) {
-      throw new Error('Erro de CORS/Rede. O Google Script não retornou permissão ou não está publicado corretamente.');
+      throw new Error('Erro de CORS ou Script não publicado como "Qualquer pessoa" (Anyone).');
     }
     throw e;
   }
@@ -86,6 +87,7 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
 
 export const googleDriveService = {
   isApiConfigured: () => !!getApiUrl(),
+  getApiUrl: () => getApiUrl(),
   getConfiguredFolderId: () => run('getConfiguredFolderId'),
   setConfiguredFolderId: (id: string) => run('setConfiguredFolderId', extractFolderId(id)),
   testFolderAccess: (id: string) => run('testFolderAccess', extractFolderId(id)),

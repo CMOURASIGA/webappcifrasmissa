@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Trash2, Tag, Cloud, AlertCircle, RefreshCw, Activity, ShieldCheck, Cpu, Info, Code, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Tag, Cloud, AlertCircle, RefreshCw, Activity, ShieldCheck, Info, Code, Copy, Check, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { googleDriveService } from '../services/googleDriveService';
@@ -14,8 +14,8 @@ const Configuracoes: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   const isApiConfigured = googleDriveService.isApiConfigured();
+  const currentApiUrl = googleDriveService.getApiUrl();
 
-  // Added handleClearData to fix "Cannot find name 'handleClearData'" error
   const handleClearData = () => {
     if (window.confirm('Tem certeza que deseja apagar todos os dados locais? Isso não afetará os arquivos no seu Google Drive.')) {
       clearAllData();
@@ -39,7 +39,7 @@ function doPost(e) {
 
 function handleRequest(method, args) {
   try {
-    // Sua lógica aqui (ex: testFolderAccess, getAllTextFiles...)
+    // ... sua lógica de acesso ao Drive ...
     return { ok: true, data: "Sucesso" }; 
   } catch(e) {
     return { ok: false, error: e.toString() };
@@ -85,15 +85,34 @@ function handleRequest(method, args) {
         </button>
       </div>
 
-      {!isApiConfigured && (
-        <div className="bg-red-50 border-2 border-red-200 p-6 rounded-3xl flex flex-col md:flex-row items-center gap-4 animate-pulse">
-           <AlertCircle className="text-red-500 shrink-0" size={32} />
-           <div className="space-y-1">
-              <h3 className="font-black text-red-900 uppercase text-sm tracking-tight">API Não Encontrada</h3>
-              <p className="text-xs text-red-700">A variável <strong>google_api</strong> está vazia no servidor.</p>
-           </div>
+      {/* STATUS DA API DO GOOGLE */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-2">
+          <LinkIcon size={20} className="text-blue-600" />
+          <h2>Conexão com Google Script</h2>
         </div>
-      )}
+
+        {!isApiConfigured ? (
+          <div className="bg-red-50 border-2 border-red-200 p-6 rounded-3xl flex flex-col md:flex-row items-center gap-4 animate-pulse">
+            <AlertCircle className="text-red-500 shrink-0" size={32} />
+            <div className="space-y-1 text-center md:text-left">
+              <h3 className="font-black text-red-900 uppercase text-sm tracking-tight">API Não Encontrada</h3>
+              <p className="text-xs text-red-700">A variável <strong>GOOGLE_API</strong> não foi detectada no Vercel.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-green-50 border border-green-100 p-4 rounded-2xl flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-green-500 text-white p-1.5 rounded-full"><Check size={16} /></div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-black text-green-700 uppercase">API Ativa (Vercel)</p>
+                <p className="text-[10px] text-green-600 font-mono truncate max-w-[200px] md:max-w-md opacity-60">{currentApiUrl}</p>
+              </div>
+            </div>
+            <span className="bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded uppercase border border-green-200">Pronto</span>
+          </div>
+        )}
+      </section>
 
       <section className="space-y-4">
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
@@ -126,7 +145,7 @@ function handleRequest(method, args) {
           </div>
           
           {testStatus.msg && (
-            <div className={`p-4 rounded-2xl border flex flex-col gap-2 ${testStatus.ok ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+            <div className={`p-4 rounded-2xl border flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 ${testStatus.ok ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
               <div className="flex items-center gap-2 font-bold">
                 {testStatus.ok ? <ShieldCheck size={20} /> : <AlertCircle size={20} />}
                 <span>{testStatus.ok ? 'Sucesso' : 'Erro de Conexão'}</span>
@@ -151,79 +170,58 @@ function handleRequest(method, args) {
             <div className="p-6 overflow-y-auto space-y-6 text-sm">
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 space-y-2">
                 <p className="font-bold text-amber-900 flex items-center gap-2"><Info size={18} /> Por que o erro acontece?</p>
-                <p className="text-amber-800 text-xs leading-relaxed">O Google bloqueia acessos externos se o seu Script não retornar os cabeçalhos de autorização corretos. Para resolver, as funções <code>doGet</code> e <code>doPost</code> no seu Google Script <strong>precisam</strong> terminar assim:</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                   <p className="text-xs font-bold text-gray-400 uppercase">Exemplo de Código Obrigatório</p>
-                   <button 
-                     onClick={handleCopyCode} 
-                     className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 transition-colors"
-                   >
-                     {copied ? <Check size={14} /> : <Copy size={14} />}
-                     <span className="text-xs font-bold">{copied ? 'Copiado!' : 'Copiar Código'}</span>
-                   </button>
-                </div>
-                <pre className="bg-slate-900 text-blue-300 p-4 rounded-xl text-[10px] font-mono overflow-x-auto leading-relaxed shadow-inner">
-{`function doGet(e) {
-  // ... sua lógica ...
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  // IMPORTANTE para evitar erro de CORS
-  var contents = e.postData.contents; 
-  // ... sua lógica ...
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}`}
-                </pre>
+                <p className="text-amber-800 text-xs leading-relaxed">O Google bloqueia acessos externos se o seu Script não estiver configurado corretamente. O erro de CORS geralmente indica que o Script <strong>não está publicado para Qualquer Pessoa</strong>.</p>
               </div>
 
               <div className="space-y-3">
-                <p className="font-bold">Checklist Final no Google Script:</p>
-                <ul className="space-y-2">
-                   <li className="flex gap-2 items-start text-xs"><Check size={14} className="text-green-500 mt-0.5" /> Clique em <strong>Implantar &gt; Nova Implantação</strong>.</li>
-                   <li className="flex gap-2 items-start text-xs"><Check size={14} className="text-green-500 mt-0.5" /> Tipo: <strong>App da Web</strong>.</li>
-                   <li className="flex gap-2 items-start text-xs"><Check size={14} className="text-green-500 mt-0.5" /> Quem tem acesso: <strong>Qualquer pessoa (Anyone)</strong>.</li>
-                   <li className="flex gap-2 items-start text-xs"><Check size={14} className="text-green-500 mt-0.5" /> Copie a URL gerada e coloque na variável <strong>google_api</strong> da Vercel.</li>
-                </ul>
+                <p className="font-bold">Passos Obrigatórios no Google Script:</p>
+                <ol className="space-y-3 list-decimal pl-5">
+                   <li className="text-xs">No editor do script, clique em <strong>Implantar &gt; Nova Implantação</strong>.</li>
+                   <li className="text-xs font-bold text-blue-600">Selecione o tipo: <strong>App da Web</strong>.</li>
+                   <li className="text-xs">Executar como: <strong>Eu (Seu E-mail)</strong>.</li>
+                   <li className="text-xs font-bold text-red-600">Quem tem acesso: <strong>Qualquer pessoa (Anyone)</strong>. <span className="font-normal text-gray-500 italic">- Este passo é o que resolve o CORS.</span></li>
+                   <li className="text-xs">Copie a URL gerada e atualize a variável <strong>GOOGLE_API</strong> no seu painel da Vercel.</li>
+                </ol>
+              </div>
+
+              <div className="bg-slate-900 text-white p-4 rounded-xl space-y-2">
+                <p className="text-[10px] font-black text-slate-500 uppercase">Dica de Ouro</p>
+                <p className="text-xs leading-relaxed">Se você usa várias contas do Google no mesmo navegador, o Google pode se confundir nos redirecionamentos. Tente testar em uma <strong>janela anônima</strong>.</p>
               </div>
             </div>
             <div className="p-6 border-t border-gray-100">
-               <button onClick={() => setShowHelper(false)} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold">Entendi, vou ajustar meu Script</button>
+               <button onClick={() => setShowHelper(false)} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200">Entendi, vou revisar a publicação</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Categorias e Manutenção (Ocultos para brevidade no log, mas mantidos) */}
+      {/* CATEGORIAS */}
       <section className="space-y-4">
         <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-2">
           <Tag size={20} className="text-blue-500" />
           <h2>Categorias Litúrgicas</h2>
         </div>
         <div className="flex gap-2">
-          <input type="text" className="flex-1 px-4 py-2 border border-gray-200 rounded-xl outline-none" placeholder="Nova categoria" value={newCat} onChange={e => setNewCat(e.target.value)} />
-          <button onClick={() => {if(newCat.trim()){addCategoria(newCat.trim()); setNewCat('');}}} className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold">Adicionar</button>
+          <input type="text" className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nova categoria" value={newCat} onChange={e => setNewCat(e.target.value)} />
+          <button onClick={() => {if(newCat.trim()){addCategoria(newCat.trim()); setNewCat('');}}} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold">Adicionar</button>
         </div>
-        <div className="grid grid-cols-2 gap-2 mt-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">
           {categorias.map(cat => (
-            <div key={cat.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100">
+            <div key={cat.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 group">
               <span className="font-medium text-gray-700 text-sm">{cat.nome}</span>
-              <button onClick={() => confirm(`Excluir "${cat.nome}"?`) && deleteCategoria(cat.id)} className="p-1.5 text-gray-300 hover:text-red-500"><Trash2 size={16} /></button>
+              <button onClick={() => confirm(`Excluir "${cat.nome}"?`) && deleteCategoria(cat.id)} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
             </div>
           ))}
         </div>
       </section>
 
+      {/* MANUTENÇÃO */}
       <section className="space-y-4 pt-6">
         <div className="flex items-center gap-2 text-red-600 font-bold text-lg border-b border-red-100 pb-2"><AlertCircle size={20} /><h2>Manutenção</h2></div>
         <div className="bg-red-50 p-6 rounded-2xl space-y-4 border border-red-100">
-           <p className="text-red-700 text-sm">Apagar o cache local não afeta seus arquivos no Drive.</p>
-           <button onClick={handleClearData} className="bg-red-600 text-white px-6 py-2.5 rounded-xl font-bold">Limpar Dados Locais</button>
+           <p className="text-red-700 text-sm font-medium">Cuidado: Limpar os dados locais removerá todas as cifras e listas salvas no navegador. Seus arquivos no Google Drive não serão afetados.</p>
+           <button onClick={handleClearData} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-md shadow-red-200">Limpar Tudo e Resetar App</button>
         </div>
       </section>
     </div>
