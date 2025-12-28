@@ -80,8 +80,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           driveFiles.forEach((file: any) => {
             const index = updatedCifras.findIndex(c => c.driveId === file.id || c.titulo === file.nome);
             
-            // Lógica Incremental: 
-            // Só atualizamos se o arquivo for novo OU se a data de modificação for diferente
             const needsUpdate = index === -1 || updatedCifras[index].ultimaAtualizacao !== file.ultimaAtualizacao;
 
             if (needsUpdate) {
@@ -162,10 +160,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       criadoEm: new Date().toISOString()
     };
     setCifras(prev => [newCifra, ...prev]);
+    scheduleDriveSave();
   };
 
   const updateCifra = (id: string, data: Partial<Cifra>) => {
     setCifras(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+    scheduleDriveSave();
   };
 
   const deleteCifra = (id: string) => {
