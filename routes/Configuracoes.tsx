@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { ArrowLeft, Plus, Trash2, Tag, Cloud, Check, AlertCircle, RefreshCw, Server, HelpCircle, Activity, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -8,7 +9,6 @@ const Configuracoes: React.FC = () => {
   const { categorias, addCategoria, deleteCategoria, config, updateConfig, clearAllData } = useApp();
   const [newCat, setNewCat] = useState('');
   const [driveId, setDriveId] = useState(config.driveFolderId || '');
-  const [gasUrl, setGasUrl] = useState(config.gasApiUrl || '');
   const [testStatus, setTestStatus] = useState<{ok?: boolean, msg?: string, loading?: boolean, time?: number, count?: number}>({});
 
   const handleAdd = () => {
@@ -24,14 +24,9 @@ const Configuracoes: React.FC = () => {
     }
   };
 
-  const saveGasUrl = () => {
-    updateConfig({ gasApiUrl: gasUrl.trim() });
-    alert('URL da API salva!');
-  };
-
   const testDriveAccess = async () => {
-    if (!driveId.trim() || !gasUrl.trim()) {
-      alert('Configure a URL da API e o ID da pasta primeiro.');
+    if (!driveId.trim()) {
+      alert('Configure o ID da pasta primeiro.');
       return;
     }
     
@@ -39,8 +34,8 @@ const Configuracoes: React.FC = () => {
     const startTime = Date.now();
     
     try {
-      // Primeiro salvamos as configurações para garantir que o serviço use os dados atuais
-      updateConfig({ gasApiUrl: gasUrl.trim(), driveFolderId: driveId.trim() });
+      // Atualiza o ID da pasta no estado global
+      updateConfig({ driveFolderId: driveId.trim() });
       
       const result = await googleDriveService.testFolderAccess(driveId);
       const endTime = Date.now();
@@ -73,33 +68,8 @@ const Configuracoes: React.FC = () => {
 
       <section className="space-y-4">
         <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-2">
-          <Server size={20} className="text-purple-600" />
-          <h2>1. API do Google Script</h2>
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold text-gray-400 uppercase">URL do Web App</label>
-          <div className="flex gap-2">
-            <input 
-              type="text"
-              className="flex-1 px-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-mono text-xs"
-              placeholder="https://script.google.com/macros/s/.../exec"
-              value={gasUrl}
-              onChange={e => setGasUrl(e.target.value)}
-            />
-            <button 
-              onClick={saveGasUrl}
-              className="bg-purple-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-purple-700 transition-colors"
-            >
-              Salvar
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 text-gray-900 font-bold text-lg border-b border-gray-100 pb-2">
           <Cloud size={20} className="text-blue-600" />
-          <h2>2. Pasta de Cifras (Google Drive)</h2>
+          <h2>Pasta de Cifras (Google Drive)</h2>
         </div>
         <div className="space-y-4">
           <div className="flex flex-col gap-2">
@@ -114,13 +84,14 @@ const Configuracoes: React.FC = () => {
               />
               <button 
                 onClick={testDriveAccess}
-                disabled={testStatus.loading || !gasUrl}
+                disabled={testStatus.loading}
                 className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {testStatus.loading ? <RefreshCw className="animate-spin" size={18} /> : <Activity size={18} />}
                 Testar Carga
               </button>
             </div>
+            <p className="text-[10px] text-gray-400 font-medium">A URL da API do Google Script está sendo gerenciada automaticamente pelo sistema.</p>
           </div>
           
           {testStatus.msg && (

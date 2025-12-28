@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Cifra, Lista, CategoriaLiturgica, AppConfig } from '../types/models';
 import { storage } from '../services/storageService';
@@ -133,7 +134,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const saveToDrive = async (): Promise<boolean> => {
-    if (!config.gasApiUrl) return false;
+    // Agora verifica a variável de ambiente process.env.google_api
+    if (!process.env.google_api) return false;
     setIsSyncing(true);
     try {
       await googleDriveService.saveUserLists(listas);

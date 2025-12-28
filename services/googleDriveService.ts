@@ -1,3 +1,4 @@
+
 /**
  * Este serviço detecta se está rodando dentro do Google ou no Vercel.
  * Se estiver no Vercel, utiliza fetch() para o Web App do Google.
@@ -14,15 +15,8 @@ const extractFolderId = (input: string): string => {
 };
 
 const getApiUrl = () => {
-  try {
-    const configRaw = localStorage.getItem('cifras_missa_config');
-    if (!configRaw) return '';
-    const config = JSON.parse(configRaw);
-    return config.gasApiUrl || '';
-  } catch (e) {
-    console.error("Erro ao ler URL da API do localStorage:", e);
-    return '';
-  }
+  // Agora utiliza exclusivamente a variável de ambiente definida no Vercel
+  return (process.env.google_api || '').trim();
 };
 
 const run = async (methodName: string, ...args: any[]): Promise<any> => {
@@ -38,7 +32,7 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
   // 2. Se estivermos no Vercel (ou local)
   const apiUrl = getApiUrl();
   if (!apiUrl) {
-    throw new Error('URL da API não configurada nas Configurações.');
+    throw new Error('A URL da API (google_api) não está configurada no ambiente.');
   }
 
   // Aumentado para 300 segundos (5 minutos) para suportar 241+ músicas.
@@ -63,7 +57,7 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      if (response.status === 404) throw new Error('Web App não encontrado (404). Verifique se a URL da API está correta.');
+      if (response.status === 404) throw new Error('Web App não encontrado (404). Verifique se a variável google_api está correta.');
       throw new Error(`Erro do Google (Status: ${response.status})`);
     }
 

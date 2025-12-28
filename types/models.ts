@@ -30,6 +30,5 @@ export interface AppConfig {
   fontSize: number;
   theme: 'light' | 'dark';
   driveFolderId?: string;
-  gasApiUrl?: string; // URL do Web App publicado no Google Apps Script
   lastSync?: string;
 }
