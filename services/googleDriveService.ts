@@ -1,13 +1,15 @@
 
 /**
  * Este serviço gerencia a comunicação com o Google Apps Script.
- * Focado em evitar o erro 'Failed to fetch' através de requisições GET e simplificação de POST.
+ * Otimizado para máxima compatibilidade com as políticas de segurança do Google.
  */
 
 declare const google: any;
 
-const cleanUrl = (url: string): string => {
-  return url.trim().replace(/[\n\r\s]/g, '');
+const sanitizeUrl = (url: string): string => {
+  if (!url) return '';
+  // Remove espaços, quebras de linha e caracteres de controle
+  return url.trim().replace(/[\n\r\s\t]/g, '');
 };
 
 const extractFolderId = (input: string): string => {
@@ -23,7 +25,7 @@ const extractFolderId = (input: string): string => {
 let currentRuntimeApiUrl = '';
 
 const run = async (methodName: string, ...args: any[]): Promise<any> => {
-  // 1. Ambiente Google Apps Script (se embutido)
+  // 1. Suporte nativo se estiver dentro do ambiente Google
   if (typeof google !== 'undefined' && google.script && google.script.run) {
     return new Promise((resolve, reject) => {
       google.script.run
@@ -32,35 +34,39 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
     });
   }
 
-  // 2. Ambiente Externo (Vercel/Web)
+  // 2. Conexão via Web (Vercel)
   if (!currentRuntimeApiUrl) {
-    throw new Error('URL da API não configurada nos Ajustes.');
+    throw new Error('Configure a URL da API nos Ajustes.');
   }
 
-  const targetUrl = cleanUrl(currentRuntimeApiUrl);
+  const targetUrl = sanitizeUrl(currentRuntimeApiUrl);
 
-  // Validação básica de URL
+  // Verificação de URL de Editor vs Execução
   if (targetUrl.includes('/edit')) {
-    throw new Error('Você colou a URL do Editor. Use a URL gerada em "Implantar > Nova Implantação" que termina em /exec');
+    throw new Error('Você usou a URL de Edição. Use a URL de "Implantação" que termina em /exec');
   }
 
   try {
-    // Para operações de leitura ou testes, usamos GET obrigatoriamente (mais seguro contra CORS)
-    // Para operações de escrita volumosa (save), usamos POST.
-    const isSaveOperation = methodName.startsWith('save') || (methodName === 'saveUserLists' && JSON.stringify(args).length > 1000);
-    
+    /**
+     * ESTRATÉGIA DE CONEXÃO ROBUSTA:
+     * Usamos GET para quase tudo. O Google lida melhor com redirecionamentos de GET.
+     * Não enviamos nenhum Header customizado (como Content-Type: application/json)
+     * para evitar o Preflight OPTIONS que causa o "Failed to fetch".
+     */
+    const isLargeData = methodName === 'saveUserLists' && JSON.stringify(args).length > 1500;
     let response;
-    
-    if (isSaveOperation) {
-      // POST "Simple Request" - Não usamos headers para evitar preflight OPTIONS
+
+    if (isLargeData) {
+      // POST para dados grandes (Listas extensas)
       response = await fetch(targetUrl, {
         method: 'POST',
         mode: 'cors',
         redirect: 'follow',
+        // Enviamos como texto puro para o Google não bloquear
         body: JSON.stringify({ method: methodName, args: args })
       });
     } else {
-      // GET "Simple Request" - O método mais compatível com redirecionamentos do Google
+      // GET para todo o resto (Sincronização, Testes, Metadados)
       const url = new URL(targetUrl);
       url.searchParams.append('method', methodName);
       url.searchParams.append('args', JSON.stringify(args));
@@ -69,40 +75,41 @@ const run = async (methodName: string, ...args: any[]): Promise<any> => {
         method: 'GET',
         mode: 'cors',
         redirect: 'follow',
-        cache: 'no-store'
+        cache: 'no-cache'
       });
     }
 
     if (!response.ok) {
-      throw new Error(`Servidor retornou erro ${response.status}`);
+      throw new Error(`Erro do Google: ${response.status}`);
     }
 
     const text = await response.text();
     
+    // Se a resposta for um HTML, o Google está pedindo login (Permissão Anyone não ativa)
+    if (text.includes('<!DOCTYPE html>') || text.includes('google-signin')) {
+      throw new Error('Acesso Negado. Verifique se publicou como "Qualquer pessoa" (Anyone).');
+    }
+
     try {
       const data = JSON.parse(text);
-      if (data && data.ok === false) throw new Error(data.error || 'Erro no Script');
+      if (data && data.ok === false) throw new Error(data.error || 'Erro interno no Script');
       return data;
-    } catch (parseError) {
-      // Se falhar o parse, provavelmente o Google retornou uma página de erro HTML ou Login
-      if (text.includes('google-signin') || text.includes('login') || text.includes('DOCTYPE html')) {
-        throw new Error('Acesso Negado. Certifique-se que o Script está publicado como "Qualquer pessoa" (Anyone).');
-      }
-      console.error('Resposta não-JSON:', text);
-      throw new Error('O Google retornou uma resposta inválida. Verifique se o código do Script está correto.');
+    } catch (e) {
+      console.error('Resposta não-JSON recebida:', text.substring(0, 200));
+      throw new Error('O Script não retornou um JSON. Verifique o código no Google.');
     }
 
   } catch (e: any) {
-    console.error('Fetch error detail:', e);
+    console.error('Fetch Error Detail:', e);
     
-    // Tratamento amigável para o erro clássico
+    // Tratamento amigável do erro reportado
     if (e.message.includes('fetch') || e.name === 'TypeError') {
       throw new Error(
-        'Falha de Rede (Failed to fetch). \n\n' +
-        'Isso acontece se:\n' +
-        '1. A URL não terminar em /exec\n' +
-        '2. Você não publicou como "Qualquer pessoa" (Anyone)\n' +
-        '3. Você está usando uma conta institucional (Workspace) que bloqueia scripts externos.'
+        'Falha de Conexão (Network Error).\n' +
+        'Possíveis causas:\n' +
+        '1. URL Inválida (verifique se termina em /exec)\n' +
+        '2. Script Desativado ou Sem Permissão "Anyone"\n' +
+        '3. Bloqueio de Firewall/VPN'
       );
     }
     throw e;
