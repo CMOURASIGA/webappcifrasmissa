@@ -233,7 +233,7 @@ function saveUserLists(lists) {
                 <div className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0">2</div>
                 <div>
                   <p className="text-sm font-bold">Quem tem acesso?</p>
-                  <p className="text-xs text-gray-500">No Google Script, em Implantar > Gerenciar Implantações, mude para uma **Nova Versão** e garanta que em "Quem tem acesso" esteja escrito: **Qualquer pessoa (Anyone)**.</p>
+                  <p className="text-xs text-gray-500">No Google Script, em Implantar &gt; Gerenciar Implantações, mude para uma **Nova Versão** e garanta que em "Quem tem acesso" esteja escrito: **Qualquer pessoa (Anyone)**.</p>
                 </div>
               </div>
               <div className="flex gap-4">
