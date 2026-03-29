@@ -1,8 +1,9 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Cifra, Lista, CategoriaLiturgica, AppConfig } from '../types/models';
 import { storage } from '../services/storageService';
 import { googleDriveService } from '../services/googleDriveService';
+import { normalizeText } from '../utils/stringUtils';
 
 interface SyncResult {
   success: boolean;
@@ -72,6 +73,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const getSortedCifras = (list: Cifra[]) => {
     return [...list].sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR', { sensitivity: 'base' }));
   };
+  const normalizeTitle = (value: string) => normalizeText((value || '').trim());
 
   const sortLibrary = () => setCifras(prev => getSortedCifras(prev));
 
@@ -90,39 +92,81 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setSyncStatus('Conectando...');
     
     try {
+      setSyncStatus('Configurando pasta...');
       await googleDriveService.setConfiguredFolderId(effectiveFolderId);
+
+      setSyncStatus('Baixando cifras...');
       const driveFiles = await googleDriveService.getAllTextFiles();
+
+      setSyncStatus('Baixando listas...');
       const driveListas = await googleDriveService.getUserLists();
       
       let newCount = 0, updatedCount = 0, keptCount = 0;
 
       if (Array.isArray(driveFiles)) {
-        const localCifrasMap = new Map(cifras.map(c => [c.driveId || c.titulo, c]));
-        const updatedList: Cifra[] = [];
+        const merged = [...cifras];
+        const indexByDriveId = new Map<string, number>();
+        const indexByTitle = new Map<string, number>();
+
+        merged.forEach((cifra, index) => {
+          if (cifra.driveId) indexByDriveId.set(cifra.driveId, index);
+          const normalized = normalizeTitle(cifra.titulo);
+          if (normalized && !indexByTitle.has(normalized)) {
+            indexByTitle.set(normalized, index);
+          }
+        });
 
         driveFiles.forEach((file: any) => {
-          const localMatch = localCifrasMap.get(file.id) || localCifrasMap.get(file.nome);
-          const hasChanged = !localMatch || localMatch.ultimaAtualizacao !== file.ultimaAtualizacao;
+          if (!file?.id || !file?.nome) return;
+
+          const driveId = String(file.id);
+          const normalizedFileTitle = normalizeTitle(String(file.nome));
+          const foundIndex =
+            indexByDriveId.get(driveId) ??
+            (normalizedFileTitle ? indexByTitle.get(normalizedFileTitle) : undefined);
+          const localMatch = foundIndex !== undefined ? merged[foundIndex] : undefined;
+
+          const driveContent = typeof file.conteudo === 'string' ? file.conteudo : '';
+          const driveUpdatedAt = typeof file.ultimaAtualizacao === 'string' ? file.ultimaAtualizacao : undefined;
+
+          const hasChanged =
+            !localMatch ||
+            localMatch.driveId !== driveId ||
+            localMatch.titulo !== file.nome ||
+            localMatch.conteudo !== driveContent ||
+            localMatch.ultimaAtualizacao !== driveUpdatedAt;
 
           if (hasChanged) {
-            updatedList.push({
+            const nextValue: Cifra = {
               id: localMatch ? localMatch.id : Math.random().toString(36).substring(2, 11),
-              driveId: file.id,
+              driveId,
               titulo: file.nome,
-              conteudo: file.conteudo,
+              conteudo: driveContent,
               tomBase: localMatch ? localMatch.tomBase : 'C',
               categorias: localMatch ? localMatch.categorias : [],
               tags: localMatch ? localMatch.tags : [],
               criadoEm: localMatch ? localMatch.criadoEm : new Date().toISOString(),
-              ultimaAtualizacao: file.ultimaAtualizacao
-            });
-            if (localMatch) updatedCount++; else newCount++;
+              ultimaAtualizacao: driveUpdatedAt
+            };
+
+            let appliedIndex = foundIndex;
+            if (appliedIndex !== undefined) {
+              merged[appliedIndex] = nextValue;
+              updatedCount++;
+            } else {
+              merged.push(nextValue);
+              appliedIndex = merged.length - 1;
+              newCount++;
+            }
+
+            indexByDriveId.set(driveId, appliedIndex);
+            if (normalizedFileTitle) indexByTitle.set(normalizedFileTitle, appliedIndex);
           } else {
             keptCount++;
-            if (localMatch) updatedList.push(localMatch);
           }
         });
-        setCifras(getSortedCifras(updatedList));
+
+        setCifras(getSortedCifras(merged));
       }
 
       if (Array.isArray(driveListas)) setListas(driveListas);
